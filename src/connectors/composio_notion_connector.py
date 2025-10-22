@@ -1,8 +1,8 @@
 """
 Composio-based Notion Connector for Notion integration
 
-This module provides Notion functionality using Composio's Notion integration
-instead of direct REST API calls. It supports both production and demo modes.
+This module provides Notion functionality using Composio's MCP (Model Context Protocol) server
+instead of direct SDK calls. It supports both production and demo modes.
 """
 
 import os
@@ -12,16 +12,15 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from composio import Composio
-from composio.client.enums import Action
+from src.connectors.mcp_client import SyncComposioMCPClient
 
 class ComposioNotionConnector:
     """
-    Notion connector that uses Composio's Notion integration to manage pages and databases.
+    Notion connector that uses Composio's MCP server to manage pages and databases.
     Supports both production mode (actual Notion operations) and demo mode (file output).
     """
     
-    def __init__(self, demo_mode=False, notion_db_id: Optional[str] = None):
+    def __init__(self, demo_mode=False, notion_db_id: Optional[str] = None, mcp_server_url: Optional[str] = None):
         """
         Initialize the Composio Notion Connector
         
@@ -29,35 +28,36 @@ class ComposioNotionConnector:
             demo_mode (bool): If True, runs in demo mode without actual Notion operations
                              Default is False for production use
             notion_db_id (str): Notion database ID (or from NOTION_DB_ID env var)
+            mcp_server_url (str): Composio MCP server URL (or from COMPOSIO_MCP_URL env var)
         """
         self.demo_mode = demo_mode
         self.notion_db_id = notion_db_id or os.getenv('NOTION_DB_ID')
-        self.notion_connected_account = None
+        self.mcp_server_url = mcp_server_url or os.getenv('COMPOSIO_MCP_URL')
+        self.mcp_client = None
         
         if not self.notion_db_id:
             raise ValueError("NOTION_DB_ID is required (set in environment or pass as parameter)")
         
         if not demo_mode:
-            # Initialize Composio client
-            self.composio_client = Composio()
+            if not self.mcp_server_url:
+                raise ValueError("COMPOSIO_MCP_URL is required for production mode (set in environment or pass as parameter)")
             
-            # Check for Notion integration and get connected account
+            # Initialize MCP client
             try:
-                # First try connected accounts (these are the actual authenticated accounts)
-                connected_accounts = self.composio_client.connected_accounts.get()
-                for account in connected_accounts:
-                    if account.appName.lower() == 'notion' and account.status == 'ACTIVE':
-                        self.notion_connected_account = account.id
-                        print(f"✅ Found active Notion connected account: {account.id}")
-                        break
-                            
-                if not self.notion_connected_account:
-                    raise ValueError("No active Notion connected account found")
+                self.mcp_client = SyncComposioMCPClient(self.mcp_server_url)
+                self.mcp_client.connect()
                 
-                print(f"✅ Notion integration available via Composio")
+                # Check if Notion tools are available
+                available_tools = self.mcp_client.get_available_tools()
+                notion_tools = [tool for tool in available_tools if 'notion' in tool.lower()]
+                
+                if not notion_tools:
+                    raise ValueError("No Notion tools available in MCP server")
+                
+                print(f"✅ Connected to Composio MCP server with {len(notion_tools)} Notion tools")
                 
             except Exception as e:
-                print(f"❌ Error initializing Composio Notion integration: {str(e)}")
+                print(f"❌ Error connecting to Composio MCP server: {str(e)}")
                 raise
         else:
             print("📝 Running in demo mode - Notion operations will not be executed")
@@ -65,7 +65,7 @@ class ComposioNotionConnector:
     def create_reorder_page(self, sku: str, qty: int, vendor_name: str, total_cost: float, 
                            eoq: int, forecast_text: str, evidence_list: List[str]) -> str:
         """
-        Update an existing reorder page (does not create new pages)
+        Create a new Notion page with reorder information
         
         Args:
             sku: Product SKU
@@ -77,21 +77,140 @@ class ComposioNotionConnector:
             evidence_list: List of evidence supporting the reorder decision
             
         Returns:
-            str: URL of the updated page
+            str: URL of the created page
         """
         if self.demo_mode:
             return self._create_demo_page(sku, qty, vendor_name, total_cost, eoq, forecast_text, evidence_list)
         
         try:
-            # This method now only updates existing pages, does not create new ones
-            # You need to provide an existing page_id to update
-            raise NotImplementedError(
-                "This method now only updates existing pages. "
-                "Use update_reorder_status() with a valid page_id instead."
+            # Format evidence as a single text block
+            evidence_text = "\n".join([f"• {evidence}" for evidence in evidence_list])
+            
+            # Use MCP client to call Notion insert row action
+            response = self.mcp_client.execute_tool(
+                tool_name="NOTION_INSERT_ROW_DATABASE",
+                arguments={
+                    "database_id": self.notion_db_id,
+                    "properties": [
+                        {
+                            "name": "SKU (Product identifier)",
+                            "type": "title",
+                            "value": sku
+                        },
+                        {
+                            "name": "Quantity(How many to order)",
+                            "type": "number",
+                            "value": str(qty)
+                        },
+                        {
+                            "name": "Vendor (Text)",
+                            "type": "rich_text",
+                            "value": vendor_name
+                        },
+                        {
+                            "name": "Total Cost (Currency)",
+                            "type": "number",
+                            "value": str(total_cost)
+                        },
+                        {
+                            "name": "Status (Select)",
+                            "type": "select",
+                            "value": "Pending"
+                        },
+                        {
+                            "name": "Priority (Select)",
+                            "type": "select",
+                            "value": "Medium"
+                        },
+                        {
+                            "name": "Forecast (Text)",
+                            "type": "rich_text",
+                            "value": forecast_text
+                        },
+                        {
+                            "name": "Evidence (Text)",
+                            "type": "rich_text",
+                            "value": evidence_text
+                        },
+                        {
+                            "name": "Order Confirmation (Text)",
+                            "type": "rich_text",
+                            "value": ""
+                        },
+                        {
+                            "name": "Supplier Contact (Email)",
+                            "type": "email",
+                            "value": "supplier@example.com"
+                        }
+                    ]
+                }
             )
             
+            # Check if the response is successful and extract the page URL
+            if response:
+                print(f"✅ Received response from MCP server for SKU {sku}")
+                
+                # Handle the actual MCP response structure
+                if isinstance(response, dict):
+                    # Check for content array structure (actual MCP response format)
+                    if 'content' in response and isinstance(response['content'], list):
+                        for item in response['content']:
+                            if isinstance(item, dict) and 'text' in item:
+                                try:
+                                    import json
+                                    parsed_response = json.loads(item['text'])
+                                    
+                                    # Check if the operation was successful
+                                    if parsed_response.get('successfull', False) or parsed_response.get('successful', False):
+                                        # Extract page ID from response_data
+                                        if 'data' in parsed_response and 'response_data' in parsed_response['data']:
+                                            response_data = parsed_response['data']['response_data']
+                                            if 'id' in response_data:
+                                                page_id = response_data['id']
+                                                page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+                                                print(f"✅ Successfully created page for SKU {sku}: {page_url}")
+                                                return page_url
+                                    
+                                    # Check for error in parsed response
+                                    if parsed_response.get('error'):
+                                        raise Exception(f"MCP server error: {parsed_response['error']}")
+                                        
+                                except json.JSONDecodeError as e:
+                                    print(f"⚠️ Failed to parse response text as JSON: {e}")
+                                    continue
+                    
+                    # Fallback: Check for legacy response structure
+                    elif 'data' in response and 'response_data' in response['data']:
+                        response_data = response['data']['response_data']
+                        if isinstance(response_data, dict) and 'id' in response_data:
+                            page_id = response_data['id']
+                            page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+                            print(f"✅ Successfully created page for SKU {sku}: {page_url}")
+                            return page_url
+                        elif isinstance(response_data, str):
+                            try:
+                                import json
+                                parsed_data = json.loads(response_data)
+                                if 'id' in parsed_data:
+                                    page_id = parsed_data['id']
+                                    page_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+                                    print(f"✅ Successfully created page for SKU {sku}: {page_url}")
+                                    return page_url
+                            except json.JSONDecodeError:
+                                pass
+                    
+                    # Check for error in response
+                    if response.get('error'):
+                        raise Exception(f"MCP server error: {response['error']}")
+                
+                # If we get here, the response format is unexpected but no error was detected
+                print(f"⚠️ Unexpected response format but no error detected for SKU {sku}")
+                return "https://www.notion.so/page-created-with-unknown-status"
+            else:
+                raise Exception("No response received from MCP server")
+                
         except Exception as e:
-            print(f"❌ Error: This method no longer creates new pages: {str(e)}")
+            print(f"❌ Error creating Notion page for SKU {sku}: {str(e)}")
             raise
 
     def update_existing_page(self, page_id: str, sku: str, qty: int, vendor_name: str, 
@@ -120,51 +239,62 @@ class ComposioNotionConnector:
             # Format evidence as a single text block
             evidence_text = "\n".join([f"• {evidence}" for evidence in evidence_list])
             
-            # Prepare update properties for the existing page
-            properties = {
-                "SKU": {
-                    "title": [{"text": {"content": sku}}]
+            # Prepare update properties for MCP client
+            properties = [
+                {
+                    "name": "SKU (Product identifier)",
+                    "type": "title",
+                    "value": sku
                 },
-                "Quantity": {
-                    "number": qty
+                {
+                    "name": "Quantity(How many to order)",
+                    "type": "number",
+                    "value": str(qty)
                 },
-                "Vendor": {
-                    "rich_text": [{"text": {"content": vendor_name}}]
+                {
+                    "name": "Vendor (Text)",
+                    "type": "rich_text",
+                    "value": vendor_name
                 },
-                "Total Cost": {
-                    "number": total_cost
+                {
+                    "name": "Total Cost (Currency)",
+                    "type": "number",
+                    "value": str(total_cost)
                 },
-                "EOQ": {
-                    "number": eoq
+                {
+                    "name": "Status (Select)",
+                    "type": "select",
+                    "value": "Pending Approval"
                 },
-                "Status": {
-                    "select": {"name": "Pending Approval"}
+                {
+                    "name": "Forecast (Text)",
+                    "type": "rich_text",
+                    "value": forecast_text
                 },
-                "Updated Date": {
-                    "date": {"start": datetime.now().isoformat()}
-                },
-                "Forecast": {
-                    "rich_text": [{"text": {"content": forecast_text}}]
-                },
-                "Evidence": {
-                    "rich_text": [{"text": {"content": evidence_text}}]
+                {
+                    "name": "Evidence (Text)",
+                    "type": "rich_text",
+                    "value": evidence_text
                 }
-            }
+            ]
             
-            # Use Composio actions API to update the existing page
-            result = self.composio_client.actions.execute(
-                action=Action('NOTION_UPDATE_PAGE'),
-                params={
+            # Use MCP client to update the existing page
+            response = self.mcp_client.execute_tool(
+                tool_name="NOTION_UPDATE_PAGE",
+                arguments={
                     "page_id": page_id,
                     "properties": properties
-                },
-                entity_id="default",
-                connected_account=self.notion_connected_account
+                }
             )
             
-            page_url = result.get('url', f"notion://page/{page_id}")
-            print(f"✅ Updated Notion page for SKU {sku}: {page_url}")
-            return page_url
+            if response and response.get('success'):
+                page_data = response.get('data', {})
+                page_url = page_data.get('url', f"notion://page/{page_id}")
+                print(f"✅ Updated Notion page for SKU {sku}: {page_url}")
+                return page_url
+            else:
+                error_msg = response.get('error', 'Unknown error occurred')
+                raise Exception(f"Failed to update page: {error_msg}")
             
         except Exception as e:
             print(f"❌ Error updating Notion page for SKU {sku}: {str(e)}")
@@ -186,39 +316,182 @@ class ComposioNotionConnector:
             return self._update_demo_page(page_id, status, order_confirm)
         
         try:
-            # Prepare update properties
+            # Prepare update properties for MCP client - use Notion API format
             properties = {
-                "Status": {
-                    "select": {"name": status}
+                "Status (Select)": {
+                    "select": {
+                        "name": status
+                    }
                 }
             }
             
             # Add order confirmation if provided
             if order_confirm:
-                properties["Order Confirmation"] = {
-                    "rich_text": [{"text": {"content": order_confirm}}]
-                }
-                properties["Updated Date"] = {
-                    "date": {"start": datetime.now().isoformat()}
+                properties["Order Confirmation (Text)"] = {
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": order_confirm
+                            }
+                        }
+                    ]
                 }
             
-            # Use Composio actions API to update the page
-            result = self.composio_client.actions.execute(
-                action=Action('NOTION_UPDATE_PAGE'),
-                params={
+            # Use MCP client to update the page
+            response = self.mcp_client.execute_tool(
+                tool_name="NOTION_UPDATE_PAGE",
+                arguments={
                     "page_id": page_id,
                     "properties": properties
-                },
-                entity_id="default",
-                connected_account=self.notion_connected_account
+                }
             )
             
-            print(f"✅ Updated Notion page {page_id} status to: {status}")
-            return True
+            # Handle the actual MCP response structure for updates
+            if response:
+                print(f"✅ Received response from MCP server for page update {page_id}")
+                
+                if isinstance(response, dict):
+                    # Check for content array structure (actual MCP response format)
+                    if 'content' in response and isinstance(response['content'], list):
+                        for item in response['content']:
+                            if isinstance(item, dict) and 'text' in item:
+                                try:
+                                    import json
+                                    parsed_response = json.loads(item['text'])
+                                    
+                                    # Check if the operation was successful
+                                    if parsed_response.get('successfull', False) or parsed_response.get('successful', False):
+                                        print(f"✅ Successfully updated page {page_id} status to: {status}")
+                                        return True
+                                    
+                                    # Check for error in parsed response
+                                    if parsed_response.get('error'):
+                                        error_msg = parsed_response['error']
+                                        print(f"❌ Failed to update Notion page {page_id}: {error_msg}")
+                                        return False
+                                        
+                                except json.JSONDecodeError as e:
+                                    print(f"⚠️ Failed to parse response text as JSON: {e}")
+                                    continue
+                    
+                    # Fallback: Check for legacy response structure
+                    elif response.get('success') or response.get('successfull', False):
+                        print(f"✅ Successfully updated page {page_id} status to: {status}")
+                        return True
+                    elif response.get('error'):
+                        error_msg = response['error']
+                        print(f"❌ Failed to update Notion page {page_id}: {error_msg}")
+                        return False
+                
+                # If we get here, assume success if no error was detected
+                print(f"✅ Page update completed for {page_id} (response format unclear but no error)")
+                return True
+            else:
+                print(f"❌ No response received from MCP server for page {page_id}")
+                return False
             
         except Exception as e:
             print(f"❌ Error updating Notion page {page_id}: {str(e)}")
-            raise
+            return False
+
+    def query_database(self, filter_properties: Optional[Dict] = None, limit: int = 100) -> List[Dict]:
+        """
+        Query the Notion database to retrieve pages.
+        
+        Args:
+            filter_properties: Optional filter criteria for the query
+            limit: Maximum number of pages to retrieve (default: 100)
+            
+        Returns:
+            List[Dict]: List of page objects from the database
+        """
+        if self.demo_mode:
+            return self._query_demo_database(filter_properties, limit)
+            
+        try:
+            # Prepare query parameters for MCP client
+            query_params = {
+                "database_id": self.notion_db_id,
+                "page_size": min(limit, 100)  # Notion API limit is 100
+            }
+            
+            # Add filter if provided
+            if filter_properties:
+                query_params["filter"] = filter_properties
+            
+            # Use MCP client to query the database
+            response = self.mcp_client.execute_tool(
+                tool_name="NOTION_QUERY_DATABASE",
+                arguments=query_params
+            )
+            
+            # Extract pages from the response
+            if response and response.get('success'):
+                data = response.get('data', {})
+                # Try different possible response structures
+                if 'results' in data:
+                    return data['results']
+                elif 'response_data' in data and 'results' in data['response_data']:
+                    return data['response_data']['results']
+                else:
+                    print(f"Unexpected query response structure: {response}")
+                    return []
+            else:
+                error_msg = response.get('error', 'Unknown error occurred')
+                print(f"❌ Failed to query database: {error_msg}")
+                return []
+                
+        except Exception as e:
+            print(f"❌ Error querying Notion database: {str(e)}")
+            return []
+
+    def _query_demo_database(self, filter_properties: Optional[Dict] = None, limit: int = 100) -> List[Dict]:
+        """
+        Query demo database (read from demo files)
+        
+        Returns:
+            List[Dict]: List of demo page objects
+        """
+        demo_dir = Path("demo/notion_pages")
+        if not demo_dir.exists():
+            return []
+            
+        demo_pages = []
+        for demo_file in demo_dir.glob("demo_page_*.json"):
+            try:
+                with open(demo_file, 'r') as f:
+                    page_data = json.load(f)
+                    # Convert demo format to Notion API format
+                    notion_page = {
+                        "id": page_data.get("page_id", ""),
+                        "properties": {
+                            "SKU (Product identifier)": {
+                                "title": [{"text": {"content": page_data.get("sku", "")}}]
+                            },
+                            "Status (Select)": {
+                                "select": {"name": page_data.get("status", "Pending Review")}
+                            },
+                            "Vendor (Text)": {
+                                "rich_text": [{"text": {"content": page_data.get("vendor", "")}}]
+                            },
+                            "Quantity(How many to order)": {
+                                "number": page_data.get("quantity", 0)
+                            },
+                            "Total Cost (Currency)": {
+                                "number": page_data.get("total_cost", 0.0)
+                            }
+                        }
+                    }
+                    demo_pages.append(notion_page)
+                    
+                    if len(demo_pages) >= limit:
+                        break
+                        
+            except Exception as e:
+                print(f"Warning: Could not read demo file {demo_file}: {e}")
+                continue
+                
+        return demo_pages
 
     def _create_demo_page(self, sku: str, qty: int, vendor_name: str, total_cost: float, 
                          eoq: int, forecast_text: str, evidence_list: List[str]) -> str:

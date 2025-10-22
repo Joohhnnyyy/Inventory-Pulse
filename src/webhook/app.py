@@ -23,7 +23,7 @@ import uvicorn
 
 # Import our modules
 from src.connectors.supplier_connector import SupplierConnector
-from src.connectors.notion_connector import NotionConnector
+from src.connectors.composio_notion_connector import ComposioNotionConnector
 from src.connectors.sheets_connector import SheetsConnector
 from src.utils.logger import setup_logger
 
@@ -217,10 +217,16 @@ class PendingActionsManager:
             return False
 
 # Initialize managers and connectors
+from src.utils.config import Config
+
+# Initialize configuration
+config = Config()
+
+# Initialize connectors
 pending_manager = PendingActionsManager()
 supplier_connector = SupplierConnector()
-notion_connector = NotionConnector()
-sheets_connector = SheetsConnector()
+notion_connector = ComposioNotionConnector(demo_mode=True)
+sheets_connector = SheetsConnector(config)
 
 def generate_success_html(action: str, sku: str, details: str = "") -> str:
     """Generate success HTML response"""
@@ -310,9 +316,9 @@ async def approve_action(
         
         # 1. Place supplier order
         order_result = supplier_connector.place_order(
+            vendor_id=vendor,
             sku=sku,
-            quantity=quantity,
-            vendor=vendor
+            qty=quantity
         )
         
         order_id = order_result.get('order_id', 'N/A')
@@ -511,6 +517,273 @@ def store_pending_approval(token: str, action_data: Dict[str, Any]) -> bool:
         bool: Success status
     """
     return pending_manager.store_pending_action(token, action_data)
+
+@app.get("/webhook/approve-batch", response_class=HTMLResponse)
+async def approve_batch_action(
+    token: str = Query(..., description="Batch approval token"),
+    secret: str = Query(..., description="Webhook secret for security")
+):
+    """Handle batch approval of multiple reorder requests"""
+    try:
+        # Verify webhook secret
+        if secret != WEBHOOK_SECRET:
+            logger.warning(f"Invalid webhook secret for batch approval: {secret}")
+            return generate_error_html("Invalid webhook secret")
+        
+        # Get pending batch action
+        action = pending_actions.get_pending_action(token)
+        if not action:
+            logger.warning(f"Batch approval token not found or expired: {token}")
+            return generate_error_html("Batch approval token not found or expired")
+        
+        if action.get('action_type') != 'batch_reorder':
+            logger.warning(f"Invalid action type for batch approval: {action.get('action_type')}")
+            return generate_error_html("Invalid action type for batch approval")
+        
+        logger.info(f"Processing batch approval for {len(action.get('items', []))} items")
+        
+        # Initialize connectors
+        supplier_connector = SupplierConnector()
+        notion_connector = ComposioNotionConnector()
+        sheets_connector = SheetsConnector()
+        
+        approved_items = []
+        failed_items = []
+        
+        # Process each item in the batch
+        for item in action.get('items', []):
+            sku = item['sku']
+            try:
+                # Place order with supplier
+                order_result = supplier_connector.place_order(
+                    sku=sku,
+                    quantity=item['quantity'],
+                    vendor=item['vendor']
+                )
+                
+                if order_result.get('success'):
+                    order_id = order_result.get('order_id', f"BATCH-{token[:8]}-{sku}")
+                    
+                    # Update Notion page status
+                    if item.get('notion_page_id'):
+                        notion_connector.update_reorder_status(
+                            item['notion_page_id'], 
+                            "ordered", 
+                            order_id
+                        )
+                    
+                    # Update Google Sheets status
+                    sheets_connector.update_inventory_status(sku, "ordered", order_id)
+                    
+                    approved_items.append({
+                        'sku': sku,
+                        'order_id': order_id,
+                        'quantity': item['quantity'],
+                        'vendor': item['vendor']
+                    })
+                    
+                    logger.info(f"Batch item approved and ordered: {sku} -> {order_id}")
+                    
+                else:
+                    failed_items.append({
+                        'sku': sku,
+                        'error': order_result.get('error', 'Unknown error')
+                    })
+                    logger.error(f"Failed to place order for batch item {sku}: {order_result.get('error')}")
+                    
+            except Exception as e:
+                failed_items.append({
+                    'sku': sku,
+                    'error': str(e)
+                })
+                logger.error(f"Exception processing batch item {sku}: {e}")
+        
+        # Update action status
+        pending_actions.update_action_status(token, "approved")
+        
+        # Generate success response
+        success_count = len(approved_items)
+        failure_count = len(failed_items)
+        total_cost = sum(item['total_cost'] for item in action.get('items', []))
+        
+        html_response = f"""
+        <html>
+        <head>
+            <title>Batch Approval Processed</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; background-color: #f8f9fa; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .success {{ color: #28a745; }}
+                .error {{ color: #dc3545; }}
+                .summary {{ background-color: #e9ecef; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+                .item {{ margin: 10px 0; padding: 10px; border-left: 4px solid #007bff; background-color: #f8f9fa; }}
+                .failed-item {{ border-left-color: #dc3545; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="success">✅ Batch Approval Processed</h1>
+                
+                <div class="summary">
+                    <h3>📊 Batch Summary</h3>
+                    <p><strong>Total Items:</strong> {success_count + failure_count}</p>
+                    <p><strong>Successfully Approved:</strong> <span class="success">{success_count}</span></p>
+                    <p><strong>Failed:</strong> <span class="error">{failure_count}</span></p>
+                    <p><strong>Total Cost:</strong> ${total_cost:.2f}</p>
+                    <p><strong>Processed:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                </div>
+        """
+        
+        if approved_items:
+            html_response += """
+                <h3 class="success">✅ Successfully Approved Items</h3>
+            """
+            for item in approved_items:
+                html_response += f"""
+                <div class="item">
+                    <strong>SKU:</strong> {item['sku']} | 
+                    <strong>Order ID:</strong> {item['order_id']} | 
+                    <strong>Qty:</strong> {item['quantity']} | 
+                    <strong>Vendor:</strong> {item['vendor']}
+                </div>
+                """
+        
+        if failed_items:
+            html_response += """
+                <h3 class="error">❌ Failed Items</h3>
+            """
+            for item in failed_items:
+                html_response += f"""
+                <div class="item failed-item">
+                    <strong>SKU:</strong> {item['sku']} | 
+                    <strong>Error:</strong> {item['error']}
+                </div>
+                """
+        
+        html_response += """
+                <p><em>All approved orders have been placed with suppliers and inventory systems have been updated.</em></p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_response
+        
+    except Exception as e:
+        logger.error(f"Error processing batch approval: {e}")
+        return generate_error_html(f"Error processing batch approval: {str(e)}")
+
+@app.get("/webhook/reject-batch", response_class=HTMLResponse)
+async def reject_batch_action(
+    token: str = Query(..., description="Batch rejection token"),
+    secret: str = Query(..., description="Webhook secret for security")
+):
+    """Handle batch rejection of multiple reorder requests"""
+    try:
+        # Verify webhook secret
+        if secret != WEBHOOK_SECRET:
+            logger.warning(f"Invalid webhook secret for batch rejection: {secret}")
+            return generate_error_html("Invalid webhook secret")
+        
+        # Get pending batch action
+        action = pending_actions.get_pending_action(token)
+        if not action:
+            logger.warning(f"Batch rejection token not found or expired: {token}")
+            return generate_error_html("Batch rejection token not found or expired")
+        
+        if action.get('action_type') != 'batch_reorder':
+            logger.warning(f"Invalid action type for batch rejection: {action.get('action_type')}")
+            return generate_error_html("Invalid action type for batch rejection")
+        
+        logger.info(f"Processing batch rejection for {len(action.get('items', []))} items")
+        
+        # Initialize connectors
+        notion_connector = ComposioNotionConnector()
+        sheets_connector = SheetsConnector()
+        
+        rejected_items = []
+        
+        # Process each item in the batch
+        for item in action.get('items', []):
+            sku = item['sku']
+            try:
+                # Update Notion page status
+                if item.get('notion_page_id'):
+                    notion_connector.update_reorder_status(
+                        item['notion_page_id'], 
+                        "rejected", 
+                        ""
+                    )
+                
+                # Update Google Sheets status
+                sheets_connector.update_inventory_status(sku, "rejected", "")
+                
+                rejected_items.append({
+                    'sku': sku,
+                    'quantity': item['quantity'],
+                    'vendor': item['vendor'],
+                    'cost': item['total_cost']
+                })
+                
+                logger.info(f"Batch item rejected: {sku}")
+                
+            except Exception as e:
+                logger.error(f"Exception processing batch rejection for {sku}: {e}")
+        
+        # Update action status
+        pending_actions.update_action_status(token, "rejected")
+        
+        # Generate response
+        total_cost = sum(item['total_cost'] for item in action.get('items', []))
+        
+        html_response = f"""
+        <html>
+        <head>
+            <title>Batch Rejection Processed</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; background-color: #f8f9fa; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .rejected {{ color: #dc3545; }}
+                .summary {{ background-color: #f8d7da; padding: 20px; border-radius: 5px; margin: 20px 0; border: 1px solid #f5c6cb; }}
+                .item {{ margin: 10px 0; padding: 10px; border-left: 4px solid #dc3545; background-color: #f8f9fa; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="rejected">❌ Batch Rejection Processed</h1>
+                
+                <div class="summary">
+                    <h3>📊 Batch Summary</h3>
+                    <p><strong>Total Items Rejected:</strong> {len(rejected_items)}</p>
+                    <p><strong>Total Cost Saved:</strong> ${total_cost:.2f}</p>
+                    <p><strong>Processed:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                </div>
+                
+                <h3 class="rejected">❌ Rejected Items</h3>
+        """
+        
+        for item in rejected_items:
+            html_response += f"""
+            <div class="item">
+                <strong>SKU:</strong> {item['sku']} | 
+                <strong>Qty:</strong> {item['quantity']} | 
+                <strong>Vendor:</strong> {item['vendor']} | 
+                <strong>Cost:</strong> ${item['cost']:.2f}
+            </div>
+            """
+        
+        html_response += """
+                <p><em>All rejected items have been marked in the inventory systems. No orders were placed.</em></p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_response
+        
+    except Exception as e:
+        logger.error(f"Error processing batch rejection: {e}")
+        return generate_error_html(f"Error processing batch rejection: {str(e)}")
 
 if __name__ == "__main__":
     # Run with uvicorn

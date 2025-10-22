@@ -16,22 +16,20 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from urllib.parse import urlencode
 
-from composio_core import ComposioToolSet, WorkspaceType
+from composio import ComposioToolSet, WorkspaceType
 from dotenv import load_dotenv
 import os
 
 # Import all our modules
-from .connectors.sheets_connector import SheetsConnector
-from .connectors.notion_connector import NotionConnector
-from .connectors.email_connector import EmailConnector
-from .connectors.supplier_connector import SupplierConnector
-# Import Composio connectors for production use
-from .connectors.composio_email_connector import ComposioEmailConnector
-from .connectors.composio_notion_connector import ComposioNotionConnector
-from .policies.reorder_policy import ReorderPolicy
-from .models.llm_rationale import generate_rationale
-from .utils.logger import setup_logger
-from .utils.config import Config
+from src.connectors.unified_mcp_connector import UnifiedMCPConnector
+from src.connectors.supplier_connector import SupplierConnector
+# Keep legacy connectors for fallback (if needed)
+from src.connectors.email_connector import EmailConnector
+from src.connectors.notion_connector import NotionConnector
+from src.policies.reorder_policy import ReorderPolicy
+from src.models.llm_rationale import generate_rationale
+from src.utils.logger import setup_logger
+from src.utils.config import Config
 
 # Load environment variables
 load_dotenv()
@@ -57,23 +55,24 @@ class InventoryAgent:
         self.auto_order_threshold = float(os.getenv("AUTO_ORDER_THRESHOLD", "500.0"))
         self.vendor_trust_threshold = float(os.getenv("VENDOR_TRUST_THRESHOLD", "0.8"))
         
-        # Initialize connectors
-        self.sheets_connector = SheetsConnector()
+        # Initialize unified MCP connector (replaces individual connectors)
+        self.mcp_connector = UnifiedMCPConnector(demo_mode=dry_run)
         
-        # Use Composio connectors for production (default mode)
-        self.notion_connector = ComposioNotionConnector(demo_mode=False)
-        self.email_connector = ComposioEmailConnector(demo_mode=False)
-        
-        # Keep legacy connectors as fallback
+        # Initialize legacy connectors as fallbacks (with proper config)
+        from src.utils.config import Config
+        config = Config()
+        # Note: SheetsConnector is now replaced by UnifiedMCPConnector
+        # self.legacy_sheets_connector = SheetsConnector(config)
         self.legacy_notion_connector = NotionConnector()
         self.legacy_email_connector = EmailConnector()
         
+        # Supplier connector (not yet integrated with MCP)
         self.supplier_connector = SupplierConnector()
         
         # Initialize policies
         self.reorder_policy = ReorderPolicy()
         
-        # Initialize Composio toolset
+        # Initialize Composio toolset (kept for backward compatibility)
         self.composio_api_key = os.getenv("COMPOSIO_API_KEY", "ak_7KV1PgJT2x0XIC_wqejz")
         self.webhook_secret = os.getenv("WEBHOOK_SECRET", "ed999b5c-aea7-44a8-b910-cae4b47cfb46")
         
@@ -84,13 +83,18 @@ class InventoryAgent:
             )
             self.logger.info("Composio toolset initialized successfully")
         except Exception as e:
-            self.logger.warning(f"Composio initialization failed: {e}. Continuing without Composio.")
+            self.logger.warning(f"Composio initialization failed: {e}. Using MCP connector only.")
             self.toolset = None
         
         # Initialize logging database
         self._init_logging_db()
         
+        # Perform health check
+        health_status = self.mcp_connector.health_check()
+        self.logger.info(f"MCP Connector Health: {health_status}")
+        
         self.logger.info(f"Inventory Agent initialized (dry_run={dry_run})")
+        self.logger.info(f"Available MCP tools: {len(self.mcp_connector.get_available_tools())}")
     
     def _init_logging_db(self):
         """Initialize SQLite database for action logging."""
@@ -163,9 +167,10 @@ class InventoryAgent:
            b. Generate LLM rationale
            c. Create or update Notion reorder page
            d. If cost < threshold and vendor trust >= threshold -> auto place order
-           e. Else send approval email with rationale and approve/reject links
-        3. Update Google Sheet with status and order ID if placed
-        4. Log actions into local SQLite or CSV
+           e. Else collect for batch approval email
+        3. Send batch approval email for all pending approvals
+        4. Update Google Sheet with status and order ID if placed
+        5. Log actions into local SQLite or CSV
         
         Returns:
             Dict with cycle summary and results
@@ -179,9 +184,13 @@ class InventoryAgent:
             "reorders_recommended": 0,
             "auto_orders_placed": 0,
             "approval_emails_sent": 0,
+            "batch_approvals_pending": 0,
             "errors": [],
             "cycle_duration_seconds": 0
         }
+        
+        # Collect pending approvals for batch email
+        pending_approvals = []
         
         try:
             # Step 1: Fetch inventory and recent transactions
@@ -198,7 +207,9 @@ class InventoryAgent:
             # Step 2: Process each SKU
             for sku_data in inventory_data:
                 try:
-                    await self._process_sku(sku_data, transaction_data, results)
+                    approval_request = await self._process_sku(sku_data, transaction_data, results)
+                    if approval_request:
+                        pending_approvals.append(approval_request)
                     results["processed_skus"] += 1
                     
                 except Exception as e:
@@ -207,7 +218,19 @@ class InventoryAgent:
                     results["errors"].append(error_msg)
                     self._log_action(sku_data.get('sku', 'unknown'), "process_error", error_msg, "error")
             
-            # Step 3: Final summary
+            # Step 3: Send batch approval email if there are pending approvals
+            if pending_approvals:
+                self.logger.info(f"Sending batch approval email for {len(pending_approvals)} reorder requests")
+                batch_message_id = self._send_batch_approval_email(pending_approvals)
+                if batch_message_id:
+                    results["approval_emails_sent"] = 1  # One batch email sent
+                    results["batch_approvals_pending"] = len(pending_approvals)
+                    self.logger.info(f"Batch approval email sent with {len(pending_approvals)} requests")
+                else:
+                    self.logger.error("Failed to send batch approval email")
+                    results["errors"].append("Failed to send batch approval email")
+            
+            # Step 4: Final summary
             cycle_duration = time.time() - cycle_start
             results["cycle_duration_seconds"] = round(cycle_duration, 2)
             
@@ -215,7 +238,8 @@ class InventoryAgent:
             self.logger.info(f"Processed: {results['processed_skus']} SKUs")
             self.logger.info(f"Reorders recommended: {results['reorders_recommended']}")
             self.logger.info(f"Auto orders placed: {results['auto_orders_placed']}")
-            self.logger.info(f"Approval emails sent: {results['approval_emails_sent']}")
+            self.logger.info(f"Batch approval emails sent: {results['approval_emails_sent']}")
+            self.logger.info(f"Pending approvals in batch: {results['batch_approvals_pending']}")
             
             if results["errors"]:
                 self.logger.warning(f"Errors encountered: {len(results['errors'])}")
@@ -230,41 +254,86 @@ class InventoryAgent:
             return results
     
     async def _fetch_inventory_data(self) -> List[Dict]:
-        """Fetch current inventory data from Google Sheets."""
+        """Fetch current inventory data from Google Sheets via MCP connector."""
         try:
-            return await self.sheets_connector.get_inventory_data()
+            inventory_items = await self.mcp_connector.read_inventory_data()
+            # Convert InventoryItem objects to dictionaries for compatibility
+            return [
+                {
+                    'sku': item.sku,
+                    'on_hand': item.current_stock,
+                    'reorder_point': item.reorder_point,
+                    'reorder_quantity': item.reorder_quantity,
+                    'vendor': item.vendor,
+                    'cost': item.cost,
+                    'description': item.description,
+                    'category': item.category
+                }
+                for item in inventory_items
+            ]
         except Exception as e:
-            self.logger.error(f"Failed to fetch inventory data: {e}")
-            return []
+            self.logger.error(f"Failed to fetch inventory data via MCP: {e}")
+            # Fallback to legacy connector
+            try:
+                self.logger.info("Falling back to legacy sheets connector")
+                return await self.legacy_sheets_connector.get_inventory_data()
+            except Exception as fallback_error:
+                self.logger.error(f"Legacy connector also failed: {fallback_error}")
+                return []
     
     async def _fetch_transaction_data(self) -> List[Dict]:
-        """Fetch recent transaction data (last 90 days) from Google Sheets."""
+        """Fetch recent transaction data (last 90 days) from Google Sheets via MCP connector."""
         try:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=90)
-            return await self.sheets_connector.get_transaction_data(start_date, end_date)
-        except Exception as e:
-            self.logger.error(f"Failed to fetch transaction data: {e}")
+            # For now, return empty list as transaction data is not implemented in MCP connector
+            # This would need to be added to the unified MCP connector
+            self.logger.info("Transaction data not yet implemented in MCP connector, using empty list")
             return []
+        except Exception as e:
+            self.logger.error(f"Failed to fetch transaction data via MCP: {e}")
+            # Fallback to legacy connector
+            try:
+                self.logger.info("Falling back to legacy sheets connector for transaction data")
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=90)
+                return await self.legacy_sheets_connector.get_transaction_data(start_date, end_date)
+            except Exception as fallback_error:
+                self.logger.error(f"Legacy connector also failed: {fallback_error}")
+                return []
     
-    async def _process_sku(self, sku_data: Dict, transaction_data: List[Dict], results: Dict):
-        """Process a single SKU through the complete reorder workflow."""
+    async def _process_sku(self, sku_data: Dict, transaction_data: List[Dict], results: Dict) -> Optional[Dict]:
+        """
+        Process a single SKU through the complete reorder workflow.
+        
+        Returns:
+            Dict with approval request data if approval is needed, None otherwise
+        """
         sku = sku_data.get('sku', 'unknown')
         self.logger.info(f"Processing SKU: {sku}")
         
         # Step 2a: Run reorder policy to get recommendation
         sku_transactions = [t for t in transaction_data if t.get('sku') == sku]
+        
+        # Create inventory_item dict for the reorder policy
+        inventory_item = {
+            'sku': sku,
+            'on_hand': sku_data.get('on_hand', 0),
+            'reorder_point': sku_data.get('reorder_point', 0)
+        }
+        
+        # Get vendor data (using default vendors if not available)
+        vendors = self._get_vendor_data()
+        
         reorder_decision = self.reorder_policy.evaluate_reorder_need(
-            sku=sku,
-            on_hand=sku_data.get('on_hand', 0),
-            transactions=sku_transactions
+            inventory_item=inventory_item,
+            transactions=sku_transactions,
+            vendors=vendors
         )
         
         self._log_action(sku, "reorder_evaluation", json.dumps(reorder_decision), "success")
         
         if not reorder_decision.get('needs_reorder', False):
             self.logger.info(f"SKU {sku}: No reorder needed")
-            return
+            return None
         
         results["reorders_recommended"] += 1
         self.logger.info(f"SKU {sku}: Reorder recommended - Qty: {reorder_decision['qty']}, Vendor: {reorder_decision['vendor']}")
@@ -275,10 +344,14 @@ class InventoryAgent:
             "on_hand": sku_data.get('on_hand', 0),
             "weekly_demand": reorder_decision.get('weekly_demand', 0),
             "stockout_date": reorder_decision.get('stockout_date', 'unknown'),
-            "best_vendor": reorder_decision.get('vendor', 'unknown'),
+            "best_vendor": {
+                "name": reorder_decision.get('vendor', 'Unknown'),
+                "EOQ": reorder_decision.get('qty', 0),
+                "TotalCost": reorder_decision.get('total_cost', 0)
+            },
             "last_90d_stats": {
-                "total_transactions": len(sku_transactions),
-                "avg_daily_demand": reorder_decision.get('avg_daily', 0)
+                "avg_daily": reorder_decision.get('avg_daily', 0),
+                "stddev": reorder_decision.get('stddev', 0.5)  # Default stddev if not available
             }
         }
         
@@ -314,16 +387,23 @@ class InventoryAgent:
                 # Update Google Sheet
                 await self._update_sheet_status(sku, "ordered", order_result.get('order_id'))
                 self.logger.info(f"SKU {sku}: Auto order placed - Order ID: {order_result.get('order_id')}")
+                return None  # No approval needed
             else:
-                # Auto order failed, send approval email
-                await self._send_approval_email(sku, reorder_decision, rationale, notion_page_id)
-                results["approval_emails_sent"] += 1
+                # Auto order failed, add to batch approval
+                reason = "auto_order_failed"
         else:
-            # Step 2e: Send approval email
-            await self._send_approval_email(sku, reorder_decision, rationale, notion_page_id)
-            results["approval_emails_sent"] += 1
+            # Add to batch approval
             reason = "dry_run" if self.dry_run else f"cost=${total_cost:.2f} > ${self.auto_order_threshold} or trust={vendor_trust_score:.2f} < {self.vendor_trust_threshold}"
-            self.logger.info(f"SKU {sku}: Approval email sent ({reason})")
+        
+        # Return approval request data for batch processing
+        self.logger.info(f"SKU {sku}: Added to batch approval ({reason})")
+        return {
+            "sku": sku,
+            "reorder_decision": reorder_decision,
+            "rationale": rationale,
+            "notion_page_id": notion_page_id,
+            "reason": reason
+        }
     
     def _get_vendor_trust_score(self, vendor: str) -> float:
         """Get vendor trust score (mock implementation)."""
@@ -336,37 +416,154 @@ class InventoryAgent:
         }
         return vendor_scores.get(vendor.lower(), vendor_scores["default"])
     
-    async def _update_notion_page(self, sku: str, reorder_decision: Dict, rationale: Dict) -> str:
-        """Create or update Notion reorder page."""
-        try:
-            page_data = {
-                "sku": sku,
-                "recommended_qty": reorder_decision.get('qty', 0),
-                "vendor": reorder_decision.get('vendor', ''),
-                "total_cost": reorder_decision.get('total_cost', 0),
-                "rationale_paragraph": rationale.get('paragraph', ''),
-                "rationale_bullets": rationale.get('bullets', []),
-                "evidence_summary": reorder_decision.get('evidence_summary', ''),
-                "status": "pending_approval",
-                "created_at": datetime.now().isoformat()
+    def _get_vendor_data(self) -> List[Dict]:
+        """Get vendor data for reorder policy evaluation."""
+        # Expanded vendor data with more realistic variety - in production this would come from a database or API
+        all_vendors = [
+            {
+                'vendor_id': 'V001',
+                'vendor_name': 'Acme Supplies',
+                'name': 'Acme Supplies',
+                'price_per_unit': 12.50,
+                'unit_cost': 12.50,  # Keep for backward compatibility
+                'holding_cost_percentage': 0.20,
+                'order_cost': 50.0,
+                'lead_time': 7
+            },
+            {
+                'vendor_id': 'V002',
+                'vendor_name': 'Global Parts',
+                'name': 'Global Parts',
+                'price_per_unit': 15.80,  # Higher price to avoid always being selected
+                'unit_cost': 15.80,  # Keep for backward compatibility
+                'holding_cost_percentage': 0.25,
+                'order_cost': 75.0,
+                'lead_time': 10
+            },
+            {
+                'vendor_id': 'V003',
+                'vendor_name': 'Quick Ship',
+                'name': 'Quick Ship',
+                'price_per_unit': 13.20,
+                'unit_cost': 13.20,  # Keep for backward compatibility
+                'holding_cost_percentage': 0.15,
+                'order_cost': 30.0,
+                'lead_time': 3
+            },
+            {
+                'vendor_id': 'V004',
+                'vendor_name': 'Industrial Supply Co',
+                'name': 'Industrial Supply Co',
+                'price_per_unit': 11.25,
+                'unit_cost': 11.25,
+                'holding_cost_percentage': 0.22,
+                'order_cost': 65.0,
+                'lead_time': 8
+            },
+            {
+                'vendor_id': 'V005',
+                'vendor_name': 'Premium Parts Ltd',
+                'name': 'Premium Parts Ltd',
+                'price_per_unit': 16.75,
+                'unit_cost': 16.75,
+                'holding_cost_percentage': 0.18,
+                'order_cost': 40.0,
+                'lead_time': 5
+            },
+            {
+                'vendor_id': 'V006',
+                'vendor_name': 'Budget Components',
+                'name': 'Budget Components',
+                'price_per_unit': 9.95,
+                'unit_cost': 9.95,
+                'holding_cost_percentage': 0.30,
+                'order_cost': 85.0,
+                'lead_time': 14
+            },
+            {
+                'vendor_id': 'V007',
+                'vendor_name': 'Express Logistics',
+                'name': 'Express Logistics',
+                'price_per_unit': 14.60,
+                'unit_cost': 14.60,
+                'holding_cost_percentage': 0.12,
+                'order_cost': 25.0,
+                'lead_time': 2
+            },
+            {
+                'vendor_id': 'V008',
+                'vendor_name': 'Reliable Vendors Inc',
+                'name': 'Reliable Vendors Inc',
+                'price_per_unit': 10.85,
+                'unit_cost': 10.85,
+                'holding_cost_percentage': 0.28,
+                'order_cost': 55.0,
+                'lead_time': 12
             }
+        ]
+        
+        # Return a random subset of 3-4 vendors to simulate realistic vendor options per evaluation
+        import random
+        random.seed(hash(str(datetime.now().date())))  # Consistent per day but varies
+        num_vendors = random.randint(3, 5)
+        return random.sample(all_vendors, num_vendors)
+    
+    async def _update_notion_page(self, sku: str, reorder_decision: Dict, rationale: Dict) -> str:
+        """Create or update Notion reorder page via MCP connector."""
+        try:
+            # Create ReorderRequest object for MCP connector
+            from src.connectors.unified_mcp_connector import ReorderRequest
             
-            page_id = await self.notion_connector.create_reorder_page(page_data)
+            reorder_request = ReorderRequest(
+                sku=sku,
+                quantity=reorder_decision.get('qty', 0),
+                vendor=reorder_decision.get('vendor', ''),
+                cost=reorder_decision.get('total_cost', 0),
+                rationale=rationale.get('paragraph', '')
+            )
+            
+            page_id = self.mcp_connector.create_reorder_page(reorder_request)
             self._log_action(sku, "notion_page_created", f"Page ID: {page_id}", "success")
             return page_id
             
         except Exception as e:
-            self.logger.error(f"Failed to update Notion page for {sku}: {e}")
-            self._log_action(sku, "notion_page_error", str(e), "error")
-            return ""
+            self.logger.error(f"Failed to update Notion page via MCP for {sku}: {e}")
+            # Fallback to legacy connector
+            try:
+                self.logger.info("Falling back to legacy notion connector")
+                
+                # Call legacy connector with the correct arguments
+                page_id = self.legacy_notion_connector.create_reorder_page(
+                    sku=sku,
+                    qty=reorder_decision.get('qty', 0),
+                    vendor_name=reorder_decision.get('vendor', ''),
+                    total_cost=reorder_decision.get('total_cost', 0),
+                    eoq=reorder_decision.get('qty', 0),  # Use qty as EOQ if not available
+                    forecast_text=f"Forecast: {reorder_decision.get('forecast_text', 'Automated forecast based on demand analysis')}",
+                    evidence_list=rationale.get('bullets', ['Automated reorder recommendation'])
+                )
+                
+                self._log_action(sku, "notion_page_created", f"Page ID: {page_id}", "success")
+                return page_id
+            except Exception as fallback_error:
+                self.logger.error(f"Legacy notion connector also failed: {fallback_error}")
+                self._log_action(sku, "notion_page_error", str(e), "error")
+                return ""
     
     async def _mark_notion_as_ordered(self, page_id: str, order_id: str):
-        """Mark Notion page as ordered with order ID."""
+        """Mark Notion page as ordered with order ID via MCP connector."""
         try:
-            await self.notion_connector.update_page_status(page_id, "ordered", {"order_id": order_id})
-            self.logger.info(f"Notion page {page_id} marked as ordered")
+            self.mcp_connector.update_notion_page(page_id, {"status": "ordered", "order_id": order_id})
+            self.logger.info(f"Notion page {page_id} marked as ordered via MCP")
         except Exception as e:
-            self.logger.error(f"Failed to mark Notion page as ordered: {e}")
+            self.logger.error(f"Failed to mark Notion page as ordered via MCP: {e}")
+            # Fallback to legacy connector
+            try:
+                self.logger.info("Falling back to legacy notion connector")
+                await self.legacy_notion_connector.update_page_status(page_id, "ordered", {"order_id": order_id})
+                self.logger.info(f"Notion page {page_id} marked as ordered via legacy connector")
+            except Exception as fallback_error:
+                self.logger.error(f"Legacy notion connector also failed: {fallback_error}")
     
     async def _place_auto_order(self, sku: str, reorder_decision: Dict) -> Dict:
         """Place automatic order via supplier connector."""
@@ -396,29 +593,216 @@ class InventoryAgent:
             self._log_action(sku, "auto_order_failed", error_msg, "error")
             return {"success": False, "error": error_msg}
     
-    async def _send_approval_email(self, sku: str, reorder_decision: Dict, rationale: Dict, notion_page_id: str):
+    def _send_batch_approval_email(self, approval_requests: List[Dict]):
+        """Send a single batch approval email for multiple reorder requests."""
+        if not approval_requests:
+            return
+        
+        self.logger.info(f"Sending batch approval email for {len(approval_requests)} reorder requests")
+        
+        # Create batch email subject
+        subject = f"Batch Reorder Approval Required - {len(approval_requests)} Items"
+        
+        # Create batch HTML body
+        html_body = self._create_batch_email_html(approval_requests)
+        
+        # Create batch ReorderRequest object for webhook handling
+        from src.connectors.unified_mcp_connector import ReorderRequest
+        batch_request = ReorderRequest(
+            sku="BATCH",
+            quantity=sum(req["reorder_decision"]["qty"] for req in approval_requests),
+            vendor="MULTIPLE",
+            cost=sum(req["reorder_decision"]["total_cost"] for req in approval_requests),
+            rationale=f"Batch approval for {len(approval_requests)} items",
+            urgency="medium",
+            auto_approve=False
+        )
+        
+        # Generate batch token for webhook handling
+        import uuid
+        batch_token = str(uuid.uuid4())
+        
+        # Store batch approval data
+        from src.webhook.app import store_pending_approval
+        batch_action_data = {
+            'sku': 'BATCH',
+            'action_type': 'batch_reorder',
+            'vendor': 'MULTIPLE',  # Required field for pending actions manager
+            'quantity': sum(req["reorder_decision"]["qty"] for req in approval_requests),
+            'total_cost': sum(req["reorder_decision"]["total_cost"] for req in approval_requests),
+            'rationale': f"Batch approval for {len(approval_requests)} items",
+            'items': [
+                {
+                    'sku': req["sku"],
+                    'vendor': req["reorder_decision"]["vendor"],
+                    'quantity': req["reorder_decision"]["qty"],
+                    'total_cost': req["reorder_decision"]["total_cost"],
+                    'notion_page_id': req["notion_page_id"]
+                }
+                for req in approval_requests
+            ]
+        }
+        
+        if not store_pending_approval(batch_token, batch_action_data):
+            self.logger.error("Failed to store batch pending approval")
+            return
+        
+        # Create batch approval/rejection URLs
+        base_url = os.getenv("WEBHOOK_BASE_URL", "http://localhost:8000")
+        approve_params = urlencode({
+            "token": batch_token,
+            "secret": self.webhook_secret
+        })
+        reject_params = urlencode({
+            "token": batch_token,
+            "secret": self.webhook_secret
+        })
+        
+        approve_url = f"{base_url}/webhook/approve-batch?{approve_params}"
+        reject_url = f"{base_url}/webhook/reject-batch?{reject_params}"
+        
+        # Send via MCP connector
+        try:
+            html_body = self._create_batch_email_html(approval_requests)
+            message_id = self.mcp_connector.send_approval_email(
+                reorder_request=batch_request,
+                approve_url=approve_url,
+                reject_url=reject_url,
+                notion_page_id="BATCH",
+                custom_html=html_body
+            )
+            
+            if message_id:
+                self.logger.info(f"Batch approval email sent successfully for {len(approval_requests)} items, Message ID: {message_id}")
+            else:
+                self.logger.error(f"Failed to send batch approval email for {len(approval_requests)} items")
+                
+        except Exception as e:
+            self.logger.error(f"Error sending batch approval email: {e}")
+    
+    def _create_batch_email_html(self, approval_requests: List[Dict]) -> str:
+        """Create HTML body for batch approval email."""
+        total_cost = sum(req["reorder_decision"]["total_cost"] for req in approval_requests)
+        
+        # Debug logging for batch email generation
+        self.logger.info(f"DEBUG BATCH: approval_requests count: {len(approval_requests)}")
+        for i, req in enumerate(approval_requests):
+            self.logger.info(f"DEBUG BATCH req[{i}]: reorder_decision keys: {list(req['reorder_decision'].keys())}")
+            self.logger.info(f"DEBUG BATCH req[{i}]: total_cost value: {req['reorder_decision'].get('total_cost', 'NOT_FOUND')}")
+        self.logger.info(f"DEBUG BATCH: calculated total_cost: {total_cost}")
+        
+        html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .header {{ background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                .summary {{ background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                .item {{ border: 1px solid #dee2e6; margin: 10px 0; padding: 15px; border-radius: 5px; }}
+                .item-header {{ font-weight: bold; color: #495057; margin-bottom: 10px; }}
+                .rationale {{ background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-left: 4px solid #007bff; }}
+                .buttons {{ text-align: center; margin: 20px 0; }}
+                .approve-btn {{ background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 0 10px; }}
+                .reject-btn {{ background-color: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 0 10px; }}
+                .cost {{ font-weight: bold; color: #28a745; }}
+                .vendor {{ color: #6c757d; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>🛒 Batch Reorder Approval Required</h2>
+                <p>The following {len(approval_requests)} items require approval for reordering:</p>
+            </div>
+            
+            <div class="summary">
+                <h3>📊 Batch Summary</h3>
+                <p><strong>Total Items:</strong> {len(approval_requests)}</p>
+                <p><strong>Total Cost:</strong> <span class="cost">${total_cost:.2f}</span></p>
+                <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+        """
+        
+        for i, req in enumerate(approval_requests, 1):
+            reorder_decision = req["reorder_decision"]
+            rationale = req["rationale"]
+            
+            html += f"""
+            <div class="item">
+                <div class="item-header">
+                    {i}. SKU: {req["sku"]} | Qty: {reorder_decision["qty"]} | 
+                    <span class="vendor">Vendor: {reorder_decision["vendor"]}</span> | 
+                    <span class="cost">Cost: ${reorder_decision["total_cost"]:.2f}</span>
+                </div>
+                
+                <div class="rationale">
+                    <h4>📝 Rationale:</h4>
+                    <p>{rationale.get("paragraph", "No rationale provided")}</p>
+                    <ul>
+            """
+            
+            for bullet in rationale.get("bullets", []):
+                html += f"<li>{bullet}</li>"
+            
+            html += """
+                    </ul>
+                </div>
+            </div>
+            """
+        
+        html += f"""
+            <div class="buttons">
+                <p><strong>Choose an action for all items:</strong></p>
+                <a href="{{approve_url}}" class="approve-btn">✅ Approve All</a>
+                <a href="{{reject_url}}" class="reject-btn">❌ Reject All</a>
+            </div>
+            
+            <p><em>Note: This is an automated batch approval request. Individual item approvals can be handled through the Notion dashboard.</em></p>
+        </body>
+        </html>
+        """
+        
+        return html
+
+    def _send_approval_email(self, sku: str, reorder_decision: Dict, rationale: Dict, notion_page_id: str):
         """Send approval email with rationale and approve/reject links."""
         try:
             # Get manager email from environment
             manager_email = os.getenv('MANAGER_EMAIL', 'manager@company.com')
             
-            # Create approval/rejection URLs with webhook secret
-            base_url = os.getenv("WEBHOOK_BASE_URL", "https://your-webhook-domain.com")
+            # Generate unique token for this approval request
+            import uuid
+            token = str(uuid.uuid4())
+            
+            # Store pending action data
+            action_data = {
+                'sku': sku,
+                'action_type': 'reorder',
+                'vendor': reorder_decision.get('vendor', 'Unknown Vendor'),
+                'quantity': reorder_decision.get('qty', 0),
+                'total_cost': reorder_decision.get('total_cost', 0),
+                'rationale': rationale.get('paragraph', ''),
+                'notion_page_id': notion_page_id or ''
+            }
+            
+            # Import and use the store function from webhook app
+            from src.webhook.app import store_pending_approval
+            if not store_pending_approval(token, action_data):
+                self.logger.error(f"Failed to store pending action for {sku}")
+                return
+            
+            # Create approval/rejection URLs with token and secret
+            base_url = os.getenv("WEBHOOK_BASE_URL", "http://localhost:8000")
             approve_params = urlencode({
-                "action": "approve",
-                "sku": sku,
-                "page_id": notion_page_id,
+                "token": token,
                 "secret": self.webhook_secret
             })
             reject_params = urlencode({
-                "action": "reject", 
-                "sku": sku,
-                "page_id": notion_page_id,
+                "token": token,
                 "secret": self.webhook_secret
             })
             
-            approve_url = f"{base_url}/webhook/approval?{approve_params}"
-            reject_url = f"{base_url}/webhook/approval?{reject_params}"
+            approve_url = f"{base_url}/webhook/approve?{approve_params}"
+            reject_url = f"{base_url}/webhook/reject?{reject_params}"
             
             # Create email subject
             subject = f"Approval Required: Reorder {sku} ({reorder_decision.get('qty', 0)} units)"
@@ -426,6 +810,12 @@ class InventoryAgent:
             # Create email body HTML
             vendor = reorder_decision.get('vendor', 'Unknown Vendor')
             total_cost = reorder_decision.get('total_cost', 0)
+            
+            # Debug logging for email generation
+            self.logger.info(f"DEBUG EMAIL: reorder_decision keys: {list(reorder_decision.keys())}")
+            self.logger.info(f"DEBUG EMAIL: reorder_decision content: {reorder_decision}")
+            self.logger.info(f"DEBUG EMAIL: extracted total_cost: {total_cost}")
+            
             rationale_paragraph = rationale.get('paragraph', '')
             rationale_bullets = rationale.get('bullets', [])
             evidence_summary = reorder_decision.get('evidence_summary', '')
@@ -451,16 +841,42 @@ class InventoryAgent:
             <p><strong>Notion Page:</strong> <a href="https://notion.so/{notion_page_id}">View Details</a></p>
             """
             
-            # Send the email with correct parameters
-            await self.email_connector.send_approval_email(
-                to=manager_email,
-                subject=subject,
-                html_body=html_body,
-                approve_link=approve_url,
-                reject_link=reject_url
+            # Create ReorderRequest object for MCP connector
+            from src.connectors.unified_mcp_connector import ReorderRequest
+            
+            # Extract unit cost from best vendor data (price_per_unit)
+            # The cost field in ReorderRequest should be unit cost, not total cost
+            unit_cost = 0
+            if 'best_vendor' in reorder_decision:
+                unit_cost = reorder_decision['best_vendor'].get('price_per_unit', 0)
+            elif 'price_per_unit' in reorder_decision:
+                unit_cost = reorder_decision.get('price_per_unit', 0)
+            
+            reorder_request = ReorderRequest(
+                sku=sku,
+                quantity=reorder_decision.get('qty', 0),
+                vendor=vendor,
+                cost=unit_cost,  # Use unit cost, not total cost
+                rationale=rationale_paragraph,
+                urgency=reorder_decision.get('urgency', 'medium'),
+                auto_approve=False
             )
             
-            self._log_action(sku, "approval_email_sent", f"Sent to {manager_email}, Notion page: {notion_page_id}", "success")
+            # Send the email via MCP connector for Gmail integration
+            self.logger.info("Using MCP connector for Gmail approval email")
+            
+            # Send email using MCP connector
+            message_id = self.mcp_connector.send_approval_email(
+                reorder_request=reorder_request,
+                approve_url=approve_url,
+                reject_url=reject_url,
+                notion_page_id=notion_page_id or ""
+            )
+            
+            if message_id:
+                self._log_action(sku, "approval_email_sent", f"Sent via MCP Gmail, Message ID: {message_id}, Notion page: {notion_page_id}", "success")
+            else:
+                self._log_action(sku, "approval_email_error", "Failed to send via MCP Gmail", "error")
             
         except Exception as e:
             error_msg = f"Failed to send approval email: {str(e)}"
@@ -468,9 +884,12 @@ class InventoryAgent:
             self._log_action(sku, "approval_email_error", error_msg, "error")
     
     async def _update_sheet_status(self, sku: str, status: str, order_id: str = ""):
-        """Update Google Sheet with order status and ID."""
+        """Update Google Sheet with order status and ID via MCP connector."""
         try:
-            await self.sheets_connector.update_item_status(sku, status, order_id)
+            # For now, this functionality is not implemented in MCP connector
+            # We'll use the legacy connector as fallback
+            self.logger.info("Sheet status update not yet implemented in MCP connector, using legacy")
+            await self.legacy_sheets_connector.update_item_status(sku, status, order_id)
             self._log_action(sku, "sheet_updated", f"Status: {status}, Order ID: {order_id}", "success")
         except Exception as e:
             error_msg = f"Failed to update sheet: {str(e)}"

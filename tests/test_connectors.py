@@ -10,8 +10,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.connectors.sheets_connector import SheetsConnector
-from src.connectors.notion_connector import NotionConnector
-from src.connectors.email_connector import EmailConnector
+from src.connectors.composio_notion_connector import ComposioNotionConnector
+from src.connectors.unified_mcp_connector import UnifiedMCPConnector
 
 
 class TestSheetsConnector(unittest.TestCase):
@@ -44,66 +44,94 @@ class TestSheetsConnector(unittest.TestCase):
             pass
 
 
-class TestNotionConnector(unittest.TestCase):
-    """Test cases for NotionConnector."""
+class TestComposioNotionConnector(unittest.TestCase):
+    """Test ComposioNotionConnector functionality"""
     
     def setUp(self):
-        """Set up test fixtures."""
-        self.notion_token = "test_token_123"
-        self.notion_db_id = "test_db_id_456"
+        """Set up test fixtures"""
+        self.connector = ComposioNotionConnector(demo_mode=True)
     
-    def test_initialization_success(self):
-        """Test successful NotionConnector initialization."""
-        connector = NotionConnector(self.notion_token, self.notion_db_id)
-        self.assertEqual(connector.notion_token, self.notion_token)
-        self.assertEqual(connector.notion_db_id, self.notion_db_id)
+    def test_initialization(self):
+        """Test connector initialization"""
+        self.assertIsInstance(self.connector, ComposioNotionConnector)
+        self.assertTrue(self.connector.demo_mode)
     
-    def test_initialization_missing_token(self):
-        """Test NotionConnector initialization with missing token."""
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ValueError) as context:
-                NotionConnector(notion_token=None, notion_db_id="test_db_id")
-            self.assertIn("NOTION_TOKEN is required", str(context.exception))
+    def test_create_reorder_page(self):
+        """Test creating a reorder page"""
+        test_data = {
+            'sku': 'TEST-001',
+            'product_name': 'Test Product',
+            'quantity': 100,
+            'unit_cost': 10.50,
+            'vendor': 'Test Vendor',
+            'priority': 'High',
+            'status': 'Pending Review'
+        }
+        
+        page_id = self.connector.create_reorder_page(test_data)
+        self.assertIsNotNone(page_id)
+        self.assertIsInstance(page_id, str)
     
-    def test_initialization_missing_db_id(self):
-        """Test NotionConnector initialization with missing database ID."""
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ValueError) as context:
-                NotionConnector(notion_token="test_token", notion_db_id=None)
-            self.assertIn("NOTION_DB_ID is required", str(context.exception))
+    def test_update_reorder_status(self):
+        """Test updating reorder status"""
+        # First create a page
+        test_data = {
+            'sku': 'TEST-002',
+            'product_name': 'Test Product 2',
+            'quantity': 50,
+            'unit_cost': 5.25,
+            'vendor': 'Test Vendor 2',
+            'priority': 'Medium',
+            'status': 'Pending Review'
+        }
+        
+        page_id = self.connector.create_reorder_page(test_data)
+        
+        # Then update its status
+        result = self.connector.update_reorder_status(page_id, 'Approved')
+        self.assertTrue(result)
+    
+    def test_query_database(self):
+        """Test querying the database"""
+        results = self.connector.query_database()
+        self.assertIsInstance(results, dict)
+        self.assertIn('results', results)
 
 
-class TestEmailConnector(unittest.TestCase):
-    """Test cases for EmailConnector."""
+class TestUnifiedMCPConnector(unittest.TestCase):
+    """Test cases for UnifiedMCPConnector."""
     
     def test_initialization_success(self):
-        """Test successful EmailConnector initialization."""
-        connector = EmailConnector(
-            smtp_host='smtp.gmail.com',
-            smtp_port=587,
-            smtp_user='test@example.com',
-            smtp_password='test_password'
+        """Test successful UnifiedMCPConnector initialization."""
+        connector = UnifiedMCPConnector(
+            demo_mode=True
         )
-        self.assertEqual(connector.smtp_host, 'smtp.gmail.com')
-        self.assertEqual(connector.smtp_port, 587)
-        self.assertEqual(connector.smtp_user, 'test@example.com')
-    
-    def test_demo_mode_initialization(self):
-        """Test EmailConnector initialization in demo mode."""
-        connector = EmailConnector(demo_mode=True)
+        self.assertIsNotNone(connector)
         self.assertTrue(connector.demo_mode)
-    
-    def test_demo_mode_email_sending(self):
-        """Test email sending in demo mode."""
-        connector = EmailConnector(demo_mode=True)
+        
+    def test_initialization_demo_mode(self):
+        """Test UnifiedMCPConnector initialization in demo mode."""
+        connector = UnifiedMCPConnector(demo_mode=True)
+        self.assertTrue(connector.demo_mode)
+        
+    def test_send_approval_email_demo(self):
+        connector = UnifiedMCPConnector(demo_mode=True)
+        
+        # Create a mock reorder request
+        from src.connectors.unified_mcp_connector import ReorderRequest
+        reorder_request = ReorderRequest(
+            sku='TEST-001',
+            quantity=100,
+            vendor='Test Vendor',
+            cost=50.0,
+            rationale='Test rationale'
+        )
         
         # In demo mode, should always return a message ID
         message_id = connector.send_approval_email(
-            to='manager@example.com',
-            subject='Test Approval',
-            html_body='<p>Test body</p>',
-            approve_link='http://example.com/approve',
-            reject_link='http://example.com/reject'
+            reorder_request=reorder_request,
+            approve_url='http://example.com/approve',
+            reject_url='http://example.com/reject'
         )
         
         self.assertIsNotNone(message_id)

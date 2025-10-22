@@ -186,22 +186,42 @@ tmp/
 *.seed
 *.pid.lock
 
+# Environment files (all variations)
+.env
+.env.*
+!.env.example
+!.env.template
+
 # Credentials and secrets
 credentials.json
 token.json
 service-account-key.json
 *.pem
 *.key
+*.p12
+*.pfx
 
 # Google Cloud Service Account Credentials
 credentials/
 credentials/*.json
 inventory-intelligence-tool-*.json
+google-credentials.json
+service-account.json
+
+# API Keys and Tokens
+*api_key*
+*token*
+*secret*
+*password*
+*credentials*
+auth.json
+config.json
 
 # Database files
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
 # Backup files
 *.bak
@@ -220,13 +240,59 @@ inventory-intelligence-tool-*.json
 # Composio specific
 .composio/
 composio_cache/
+composio_auth/
 
 # Google Sheets API
 sheets_credentials.json
 sheets_token.json
+google_sheets_credentials.json
 
 # Notion API
 notion_credentials.json
+notion_token.json
 
 # Email credentials
 email_credentials.json
+smtp_credentials.json
+gmail_credentials.json
+
+# Webhook secrets and tokens
+webhook_secret.json
+approval_tokens.json
+
+# Output directories with sensitive data
+demo/outbox/*.html
+outbox/
+output/
+exports/
+
+# Log files that might contain sensitive data
+*.log
+logs/
+debug.log
+error.log
+
+# Configuration files that might contain secrets
+config.ini
+settings.json
+local_settings.py
+
+# IDE and editor files
+.vscode/settings.json
+.idea/workspace.xml
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Personal notes and documentation
+personal_notes.md
+todo.md
+scratch.py
+test_*.py
+debug_*.py

@@ -1,0 +1,10 @@
+[
+  {
+    "action": "recompute",
+    "sku": "OFFICE-001",
+    "reason": "manual_rejection",
+    "timestamp": "2025-10-22T19:25:13.517110",
+    "original_vendor": "Reliable Vendors Inc",
+    "original_quantity": 39
+  }
+]

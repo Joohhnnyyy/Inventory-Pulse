@@ -76,34 +76,31 @@ class NotionConnector:
                     "text": {"content": f"• {evidence}"}
                 })
             
-            # Create page properties
+            # Create page properties (using actual Notion database property names)
             properties = {
-                "SKU": {
+                "SKU (Product identifier)": {
                     "title": [{"text": {"content": sku}}]
                 },
-                "Quantity": {
+                "Quantity(How many to order)": {
                     "number": qty
                 },
-                "Vendor": {
+                "Vendor (Text)": {
                     "rich_text": [{"text": {"content": vendor_name}}]
                 },
-                "Total Cost": {
+                "Total Cost (Currency)": {
                     "number": total_cost
                 },
-                "EOQ": {
-                    "number": eoq
+                "Status (Select)": {
+                    "select": {"name": "Pending Review"}
                 },
-                "Status": {
-                    "select": {"name": "Pending Approval"}
-                },
-                "Created Date": {
-                    "date": {"start": datetime.now().isoformat()}
-                },
-                "Forecast": {
+                "Forecast (Text)": {
                     "rich_text": [{"text": {"content": forecast_text}}]
                 },
-                "Evidence": {
+                "Evidence (Text)": {
                     "rich_text": evidence_blocks
+                },
+                "Priority (Select)": {
+                    "select": {"name": "Medium"}
                 }
             }
             
@@ -129,13 +126,14 @@ class NotionConnector:
             page_url = page_data['url']
             
             self.logger.info(f"Created Notion reorder page for SKU {sku}: {page_url}")
-            return page_url
+            return page_id  # Return page ID instead of URL for easier updates
             
         except Exception as e:
             self.logger.error(f"Error creating Notion reorder page for SKU {sku}: {str(e)}")
             raise
     
-    def update_reorder_status(self, page_id: str, status: str, order_confirm: Optional[str] = None) -> bool:
+    def update_reorder_status(self, page_id: str, status: str, order_confirm: Optional[str] = None, 
+                             priority: Optional[str] = None) -> bool:
         """
         Update the status of a reorder page.
         
@@ -143,6 +141,7 @@ class NotionConnector:
             page_id: Notion page ID to update
             status: New status (e.g., "Approved", "Rejected", "Ordered", "Delivered")
             order_confirm: Optional order confirmation details
+            priority: Optional priority level (e.g., "Low", "Medium", "High", "Critical")
             
         Returns:
             bool: True if update was successful
@@ -152,18 +151,21 @@ class NotionConnector:
         """
         try:
             properties = {
-                "Status": {
+                "Status (Select)": {
                     "select": {"name": status}
                 }
             }
             
             # Add order confirmation if provided
             if order_confirm:
-                properties["Order Confirmation"] = {
+                properties["Order Confirmation (Text)"] = {
                     "rich_text": [{"text": {"content": order_confirm}}]
                 }
-                properties["Updated Date"] = {
-                    "date": {"start": datetime.now().isoformat()}
+            
+            # Add priority if provided
+            if priority:
+                properties["Priority (Select)"] = {
+                    "select": {"name": priority}
                 }
             
             # Update the page
@@ -185,6 +187,66 @@ class NotionConnector:
             
         except Exception as e:
             self.logger.error(f"Error updating Notion page {page_id}: {str(e)}")
+            raise
+
+    def query_database(self, filter_properties: Optional[Dict] = None, limit: int = 100) -> List[Dict]:
+        """
+        Query the Notion database to retrieve existing pages.
+        
+        Args:
+            filter_properties: Optional filter criteria (e.g., {"SKU": "WIDGET-001"})
+            limit: Maximum number of pages to retrieve (default: 100)
+            
+        Returns:
+            List[Dict]: List of page objects from the database
+            
+        Raises:
+            Exception: If query fails
+        """
+        try:
+            # Build query payload
+            payload = {
+                "page_size": min(limit, 100)  # Notion API limit is 100
+            }
+            
+            # Add filter if provided
+            if filter_properties:
+                filters = []
+                for prop_name, prop_value in filter_properties.items():
+                    filters.append({
+                        "property": prop_name,
+                        "rich_text": {
+                            "contains": str(prop_value)
+                        }
+                    })
+                
+                if len(filters) == 1:
+                    payload["filter"] = filters[0]
+                else:
+                    payload["filter"] = {
+                        "and": filters
+                    }
+            
+            # Query the database
+            response = requests.post(
+                f"{self.base_url}/databases/{self.notion_db_id}/query",
+                headers=self.headers,
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                error_msg = f"Failed to query Notion database: {response.status_code} - {response.text}"
+                self.logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            data = response.json()
+            pages = data.get('results', [])
+            
+            self.logger.info(f"Successfully queried Notion database: Found {len(pages)} pages")
+            return pages
+            
+        except Exception as e:
+            self.logger.error(f"Error querying Notion database: {str(e)}")
             raise
 
 

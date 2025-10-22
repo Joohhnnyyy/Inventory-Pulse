@@ -1,357 +1,736 @@
-# 🏭 Inventory Intelligence Tool (IIT)
+# Inventory Pulse
 
-An AI-powered inventory management system that automates reorder decisions, integrates with Notion for workflow management, and provides intelligent forecasting with email approval workflows.
+**Intelligent Inventory Management System with AI-Driven Reorder Automation**
 
-## 🎯 Overview
+Inventory Pulse is an advanced inventory management system that leverages artificial intelligence and the Model Context Protocol (MCP) to automate inventory monitoring, reorder decision-making, and supplier coordination. The system integrates seamlessly with Google Sheets, Notion, and email platforms to provide a comprehensive solution for modern inventory management challenges.
 
-The Inventory Intelligence Tool is a comprehensive solution for automated inventory management that combines:
+## Table of Contents
 
-- **🤖 AI-Powered Decision Making**: Intelligent reorder recommendations with LLM-generated rationale
-- **📊 Multi-Platform Integration**: Google Sheets, Notion, and Email connectors
-- **🔄 Automated Workflows**: From inventory monitoring to supplier order placement
-- **✅ Approval System**: Email-based approval workflows with webhook handling
-- **📈 Forecasting**: Advanced inventory forecasting and EOQ optimization
-- **🔧 Composio Integration**: Production-ready integrations with Gmail and Notion
+- [Overview](#overview)
+- [System Architecture](#system-architecture)
+- [Core Approach](#core-approach)
+- [How It Works](#how-it-works)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Project Structure](#project-structure)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 
-## 🚀 Features
+## Overview
 
-### Core Functionality
-- **Automated Inventory Monitoring**: Continuous monitoring of stock levels from Google Sheets
-- **Intelligent Reorder Decisions**: AI-powered analysis with detailed rationale generation
-- **Multi-Channel Notifications**: Email alerts with approve/reject functionality
-- **Notion Integration**: Automatic creation and management of reorder pages
-- **Supplier Integration**: Automated order placement with trusted suppliers
-- **Webhook Server**: FastAPI-based approval handling system
+Inventory Pulse addresses the critical challenge of maintaining optimal inventory levels while minimizing costs and preventing stockouts. The system employs a sophisticated multi-layered approach that combines real-time data analysis, predictive modeling, and automated decision-making to streamline inventory operations.
 
-### Connectors
-- **📊 Google Sheets Connector**: Read inventory data and update order status
-- **📋 Notion Connector**: Create and manage reorder pages with rich formatting
-- **📧 Email Connector**: Send approval emails with HTML formatting
-- **🏪 Supplier Connector**: Place orders with supplier APIs
-- **🔗 Composio Connectors**: Production-ready Gmail and Notion integrations
+### Problem Statement
 
-### Policies & Models
-- **📈 Reorder Policy**: Configurable reorder point and quantity calculations
-- **🧮 EOQ Optimizer**: Economic Order Quantity optimization
-- **🔮 Forecasting Models**: Demand forecasting with trend analysis
-- **🤖 LLM Rationale**: AI-generated explanations for reorder decisions
+Traditional inventory management systems often suffer from:
+- Manual monitoring processes prone to human error
+- Reactive rather than proactive reorder strategies
+- Lack of integration between different business systems
+- Insufficient visibility into decision-making rationale
+- Time-consuming approval workflows
 
-## 📋 Prerequisites
+### Solution Approach
 
-- **Python 3.8+**
-- **Google Cloud Project** (for Sheets integration)
-- **Notion Account** (for workflow management)
-- **Gmail Account** (for email notifications)
-- **Composio Account** (for production integrations)
+Inventory Pulse solves these challenges through:
+- **Automated Monitoring**: Continuous surveillance of inventory levels across all SKUs
+- **Predictive Analytics**: AI-driven demand forecasting and trend analysis
+- **Intelligent Decision Making**: Economic Order Quantity (EOQ) optimization with vendor selection
+- **Unified Integration**: Seamless connectivity across Google Sheets, Notion, and email systems
+- **Transparent Workflows**: Clear audit trails and decision rationale for all actions
 
-## 🛠️ Installation
+## System Architecture
 
-### 1. Clone the Repository
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Inventory Pulse                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Agent Main    │    │  MCP Server     │    │ External    │  │
+│  │   Controller    │◄──►│   Gateway       │◄──►│ Services    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│           │                       │                      │       │
+│           ▼                       ▼                      ▼       │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │ Business Logic  │    │ Legacy Fallback │    │ Webhook     │  │
+│  │ & Policies      │    │ Connectors      │    │ Server      │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Component Architecture
+
+The system is built on a modular architecture with clear separation of concerns:
+
+**1. Agent Main Controller**
+- Orchestrates the entire inventory management workflow
+- Implements the core business logic and decision-making processes
+- Manages data flow between different system components
+- Handles error recovery and fallback mechanisms
+
+**2. MCP Integration Layer**
+- Provides unified access to external services through the Model Context Protocol
+- Standardizes communication patterns across different APIs
+- Enables seamless switching between different service providers
+- Maintains consistent data formats and error handling
+
+**3. Business Logic Layer**
+- Implements reorder policies and optimization algorithms
+- Performs Economic Order Quantity (EOQ) calculations
+- Generates AI-powered rationale for decisions
+- Manages vendor selection and cost optimization
+
+**4. Data Integration Layer**
+- Connects to Google Sheets for inventory data management
+- Integrates with Notion for workflow and documentation
+- Handles email communications for approvals and notifications
+- Manages supplier API interactions for order placement
+
+## Core Approach
+
+### 1. Data-Driven Decision Making
+
+Inventory Pulse employs a sophisticated data analysis approach that considers multiple factors:
+
+**Inventory Metrics Analysis**
+- Current stock levels and consumption rates
+- Historical demand patterns and seasonality
+- Lead times and supplier reliability metrics
+- Cost structures and pricing variations
+
+**Predictive Modeling**
+- Time-series forecasting for demand prediction
+- Trend analysis for identifying consumption patterns
+- Seasonal adjustment for cyclical inventory needs
+- Risk assessment for stockout probability
+
+### 2. Economic Optimization
+
+The system implements advanced optimization algorithms to minimize total inventory costs:
+
+**Economic Order Quantity (EOQ) Calculation**
+```
+EOQ = √(2 × Annual Demand × Ordering Cost / Holding Cost)
+```
+
+**Total Cost Optimization**
+- Balances ordering costs against holding costs
+- Considers quantity discounts and bulk pricing
+- Factors in storage limitations and cash flow constraints
+- Optimizes across multiple suppliers and vendors
+
+### 3. Intelligent Automation
+
+The automation framework is designed with multiple layers of intelligence:
+
+**Rule-Based Automation**
+- Configurable thresholds for automatic reordering
+- Business rules for vendor selection and approval routing
+- Safety stock calculations based on demand variability
+- Lead time adjustments for supplier performance
+
+**AI-Enhanced Decision Making**
+- Large Language Model (LLM) integration for rationale generation
+- Natural language explanations for all reorder decisions
+- Context-aware recommendations based on business conditions
+- Continuous learning from historical decision outcomes
+
+### 4. Workflow Integration
+
+The system seamlessly integrates with existing business workflows:
+
+**Google Sheets Integration**
+- Real-time inventory data synchronization
+- Automated updates of stock levels and reorder status
+- Historical tracking of inventory movements
+- Customizable reporting and dashboard views
+
+**Notion Workflow Management**
+- Structured documentation of reorder decisions
+- Approval workflow tracking and status updates
+- Searchable knowledge base of inventory actions
+- Team collaboration and communication tools
+
+**Email-Based Approvals**
+- Automated generation of approval requests
+- Embedded approve/reject links for quick decisions
+- Detailed rationale and supporting data in notifications
+- Audit trail of all approval activities
+
+## How It Works
+
+### Phase 1: Inventory Monitoring and Analysis
+
+**1.1 Data Collection**
+The system continuously monitors inventory levels by:
+- Fetching current stock data from Google Sheets via MCP connector
+- Retrieving historical consumption patterns and trends
+- Collecting supplier information including pricing and lead times
+- Gathering external factors such as seasonal demand indicators
+
+**1.2 Demand Forecasting**
+Advanced analytics engine processes the collected data to:
+- Generate demand forecasts using time-series analysis
+- Identify consumption trends and seasonal patterns
+- Calculate demand variability and uncertainty metrics
+- Predict future inventory requirements with confidence intervals
+
+**1.3 Risk Assessment**
+The system evaluates inventory risks by:
+- Calculating stockout probability based on current levels
+- Assessing supplier reliability and lead time variability
+- Identifying critical SKUs with high business impact
+- Evaluating market conditions and external risk factors
+
+### Phase 2: Reorder Decision Engine
+
+**2.1 Policy Evaluation**
+The reorder policy engine determines when action is needed by:
+- Comparing current stock levels against reorder points
+- Evaluating safety stock requirements based on demand variability
+- Considering lead times and supplier performance metrics
+- Applying business rules and constraints for decision making
+
+**2.2 Economic Optimization**
+When reorder is triggered, the EOQ optimizer:
+- Calculates optimal order quantities to minimize total costs
+- Evaluates multiple suppliers and pricing structures
+- Considers quantity discounts and bulk pricing opportunities
+- Balances ordering costs against inventory holding costs
+
+**2.3 Vendor Selection**
+The intelligent vendor selection process:
+- Compares pricing across multiple suppliers
+- Evaluates supplier reliability and performance history
+- Considers lead times and delivery capabilities
+- Factors in payment terms and relationship quality
+
+### Phase 3: Workflow Orchestration
+
+**3.1 Documentation Generation**
+For each reorder decision, the system:
+- Creates detailed Notion pages with complete rationale
+- Generates AI-powered explanations for decision logic
+- Documents all relevant data and calculations
+- Provides links to supporting information and historical context
+
+**3.2 Approval Workflow**
+The approval process involves:
+- Generating comprehensive approval emails with embedded decision data
+- Routing requests to appropriate managers based on cost thresholds
+- Providing one-click approve/reject functionality via secure links
+- Tracking approval status and maintaining audit trails
+
+**3.3 Order Execution**
+Upon approval, the system:
+- Automatically places orders with selected suppliers via API
+- Updates inventory systems with pending order information
+- Schedules follow-up activities and delivery tracking
+- Notifies relevant stakeholders of order placement
+
+### Phase 4: Continuous Monitoring and Learning
+
+**4.1 Status Tracking**
+The system continuously monitors:
+- Order status and delivery progress
+- Inventory level changes and consumption patterns
+- Supplier performance and delivery accuracy
+- System performance and decision quality metrics
+
+**4.2 Performance Analysis**
+Regular analysis includes:
+- Comparing actual outcomes against predictions
+- Measuring cost savings and efficiency improvements
+- Identifying areas for optimization and enhancement
+- Generating performance reports and recommendations
+
+**4.3 System Optimization**
+Based on performance data, the system:
+- Adjusts forecasting models and parameters
+- Refines reorder policies and thresholds
+- Updates supplier ratings and preferences
+- Improves decision-making algorithms and processes
+
+## Key Features
+
+### Intelligent Automation
+- **Automated Inventory Monitoring**: Continuous surveillance of stock levels across all SKUs
+- **Predictive Reorder Triggers**: AI-driven identification of reorder needs before stockouts occur
+- **Economic Order Quantity Optimization**: Automated calculation of optimal order quantities
+- **Intelligent Vendor Selection**: Multi-criteria supplier evaluation and selection
+
+### Seamless Integration
+- **Google Sheets Connectivity**: Real-time synchronization with existing inventory spreadsheets
+- **Notion Workflow Management**: Structured documentation and approval workflows
+- **Email-Based Approvals**: Streamlined approval process with embedded decision links
+- **MCP Protocol Support**: Unified integration framework for extensibility
+
+### Advanced Analytics
+- **Demand Forecasting**: Time-series analysis and trend prediction
+- **Cost Optimization**: Total cost minimization across ordering and holding costs
+- **Risk Assessment**: Stockout probability and supplier reliability analysis
+- **Performance Metrics**: Comprehensive tracking and reporting capabilities
+
+### Transparency and Auditability
+- **AI-Generated Rationale**: Natural language explanations for all decisions
+- **Complete Audit Trails**: Full documentation of all actions and decisions
+- **Decision Transparency**: Clear visibility into decision-making logic and data
+- **Historical Analysis**: Comprehensive tracking of system performance over time
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Google Cloud Platform account with Sheets API enabled
+- Notion workspace with integration capabilities
+- Email account with SMTP access (Gmail recommended)
+- MCP server setup (optional but recommended)
+
+### Step 1: Clone Repository
+
 ```bash
 git clone <repository-url>
 cd iit
 ```
 
-### 2. Install Dependencies
+### Step 2: Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Environment Setup
+### Step 3: Environment Setup
+
 ```bash
 cp .env.example .env
+# Edit .env with your configuration values
 ```
 
-Edit the `.env` file with your configuration:
+### Step 4: Credential Configuration
+
+Create the credentials directory and add your service account files:
 
 ```bash
-# Composio Configuration
-COMPOSIO_API_KEY=your_composio_api_key_here
-
-# Google Sheets Configuration
-GOOGLE_SHEETS_CREDENTIALS_JSON=./credentials/google_sheets_service_account.json
-GOOGLE_SHEETS_SPREADSHEET_ID=your_google_sheets_spreadsheet_id_here
-
-# Notion Configuration
-NOTION_TOKEN=your_notion_integration_token_here
-NOTION_DB_ID=your_notion_database_id_here
-
-# Email Configuration
-GMAIL_USER=your_email@gmail.com
-GMAIL_PASSWORD_OR_TOKEN=your_gmail_app_password_here
-MANAGER_EMAIL=manager@company.com
-
-# Supplier Configuration (Optional)
-SUPPLIER_API_KEY=your_supplier_api_key_here
-SUPPLIER_API_BASE_URL=https://api.supplier.com/v1
+mkdir -p credentials
+# Add your Google Sheets service account JSON file
+# Add any other required credential files
 ```
 
-## ⚙️ Setup Guide
-
-### 1. Google Sheets Setup
-
-1. **Create a Google Cloud Project**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing one
-   - Enable Google Sheets API
-
-2. **Create Service Account**
-   - Go to IAM & Admin > Service Accounts
-   - Create new service account
-   - Download JSON credentials file
-   - Place in `credentials/` directory
-
-3. **Prepare Your Spreadsheet**
-   - Create a Google Sheet with inventory data
-   - Required columns: SKU, Current Stock, Reorder Point, etc.
-   - Share sheet with service account email
-
-### 2. Notion Setup
-
-Follow the detailed [Notion Setup Guide](NOTION_SETUP_GUIDE.md):
-
-1. **Create Notion Integration**
-   - Go to [Notion Developers](https://developers.notion.com)
-   - Create new integration
-   - Copy integration token
-
-2. **Create Inventory Database**
-   - Create new database in Notion
-   - Set up required properties (SKU, Quantity, Vendor, etc.)
-   - Share database with integration
-
-### 3. Composio Setup
-
-1. **Get Composio API Key**
-   - Sign up at [Composio](https://composio.dev)
-   - Get your API key from dashboard
-
-2. **Connect Gmail Account**
-   ```bash
-   python composio_gmail_setup.py
-   ```
-
-3. **Connect Notion Account**
-   ```bash
-   python -c "from src.connectors.composio_notion_connector import ComposioNotionConnector; ComposioNotionConnector(demo_mode=False)"
-   ```
-
-### 4. Email Configuration
-
-1. **Gmail App Password**
-   - Enable 2-factor authentication on Gmail
-   - Generate app-specific password
-   - Use in `GMAIL_PASSWORD_OR_TOKEN`
-
-2. **Test Email Setup**
-   ```bash
-   python test_composio_gmail.py
-   ```
-
-## 🚀 Usage
-
-### Running the Main Agent
+### Step 5: Initial Setup
 
 ```bash
-# Run in production mode
-python -m src.agent_main
+# Test Google Sheets connection
+python tests/test_sheets_connector.py
 
-# Run in dry-run mode (no actual orders)
-python -m src.agent_main --dry-run
+# Test Notion integration
+python tests/test_notion_connector.py
 
-# Run with custom configuration
-python -m src.agent_main --config custom_config.json
+# Test email functionality
+python tests/test_email_connector.py
 ```
 
-### Starting the Webhook Server
-
-```bash
-# Start the approval webhook server
-uvicorn src.webhook.app:app --host 0.0.0.0 --port 8080 --reload
-```
-
-### Testing Components
-
-```bash
-# Test email delivery
-python test_email_delivery.py
-
-# Test Notion connection
-python test_notion_connection.py
-
-# Test Composio Gmail integration
-python test_composio_gmail.py
-
-# Test alternative email methods
-python test_alternative_email.py
-```
-
-## 📁 Project Structure
-
-```
-iit/
-├── src/
-│   ├── agent_main.py              # Main orchestrator
-│   ├── connectors/                # Integration connectors
-│   │   ├── sheets_connector.py    # Google Sheets integration
-│   │   ├── notion_connector.py    # Notion integration
-│   │   ├── email_connector.py     # Email functionality
-│   │   ├── composio_email_connector_class.py  # Composio Gmail
-│   │   ├── composio_notion_connector.py       # Composio Notion
-│   │   └── supplier_connector.py  # Supplier API integration
-│   ├── models/                    # Data models and AI
-│   │   ├── forecast.py           # Forecasting models
-│   │   └── llm_rationale.py      # AI rationale generation
-│   ├── policies/                 # Business logic
-│   │   ├── reorder_policy.py     # Reorder decision logic
-│   │   ├── eoq_optimizer.py      # Economic Order Quantity
-│   │   └── replenishment_policy.py # Replenishment strategies
-│   ├── utils/                    # Utilities
-│   │   ├── config.py            # Configuration management
-│   │   └── logger.py            # Logging setup
-│   └── webhook/                  # Webhook server
-│       └── app.py               # FastAPI approval server
-├── tests/                       # Unit tests
-├── demo/                        # Demo data and outputs
-├── credentials/                 # API credentials
-├── test_*.py                   # Integration tests
-├── requirements.txt            # Python dependencies
-├── .env.example               # Environment template
-└── README.md                  # This file
-```
-
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `COMPOSIO_API_KEY` | Composio API key for integrations | Yes |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | Google Sheets spreadsheet ID | Yes |
-| `NOTION_TOKEN` | Notion integration token | Yes |
-| `NOTION_DB_ID` | Notion database ID | Yes |
-| `GMAIL_USER` | Gmail account for sending emails | Yes |
-| `GMAIL_PASSWORD_OR_TOKEN` | Gmail app password | Yes |
-| `MANAGER_EMAIL` | Email for approval notifications | Yes |
-| `AUTO_ORDER_THRESHOLD` | Auto-order threshold amount | No |
-| `VENDOR_TRUST_THRESHOLD` | Vendor trust score threshold | No |
+The system requires several environment variables for proper operation:
 
-### Agent Configuration
+#### Core Configuration
+```bash
+# MCP Server Configuration
+MCP_SERVER_URL=http://localhost:3000
 
-The agent supports various configuration options:
+# Google Sheets Integration
+GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
+GOOGLE_SHEETS_CREDENTIALS_JSON=./credentials/google_sheets_service_account.json
 
-```python
-# In agent_main.py
-auto_order_threshold = 500.0      # Orders below this amount are auto-approved
-vendor_trust_threshold = 0.8      # Minimum vendor trust score
+# Notion Integration
+NOTION_TOKEN=your_notion_integration_token
+NOTION_DB_ID=your_notion_database_id
+
+# Email Configuration
+GMAIL_USER=your_email@gmail.com
+GMAIL_PASSWORD_OR_TOKEN=your_app_password
+MANAGER_EMAIL=manager@company.com
+
+# Optional Supplier Integration
+SUPPLIER_API_KEY=your_supplier_api_key
+SUPPLIER_API_BASE_URL=https://api.supplier.com
+
+# System Configuration
+DEMO_MODE=false
+LOG_LEVEL=INFO
 ```
 
-## 🔄 Workflow
+#### Advanced Configuration
 
-1. **Inventory Monitoring**: Agent reads current stock levels from Google Sheets
-2. **Reorder Analysis**: AI analyzes inventory data and generates reorder recommendations
-3. **Notion Page Creation**: Creates detailed reorder pages in Notion with rationale
-4. **Email Approval**: Sends approval emails to managers with approve/reject links
-5. **Webhook Processing**: Handles approval/rejection responses via webhook server
-6. **Order Placement**: Places orders with suppliers for approved items
-7. **Status Updates**: Updates Google Sheets and Notion with order status
+```bash
+# Reorder Policy Settings
+AUTO_ORDER_THRESHOLD=500.0
+VENDOR_TRUST_THRESHOLD=0.8
+SAFETY_STOCK_MULTIPLIER=1.5
 
-## 🧪 Testing
+# Economic Optimization
+HOLDING_COST_RATE=0.25
+ORDERING_COST_DEFAULT=50.0
+DISCOUNT_THRESHOLD=1000.0
 
-### Unit Tests
+# Notification Settings
+BATCH_APPROVAL_ENABLED=true
+NOTIFICATION_FREQUENCY=daily
+ESCALATION_TIMEOUT=24
+```
+
+### Google Sheets Setup
+
+1. **Create Service Account**
+   - Go to Google Cloud Console
+   - Create a new service account
+   - Download the JSON credentials file
+   - Place in `credentials/` directory
+
+2. **Enable APIs**
+   - Enable Google Sheets API
+   - Enable Google Drive API (for file access)
+
+3. **Share Spreadsheet**
+   - Share your inventory spreadsheet with the service account email
+   - Grant "Editor" permissions
+
+4. **Configure Sheet Structure**
+   - Ensure required columns: SKU, Current Stock, Reorder Point, etc.
+   - Follow the provided template structure
+
+### Notion Setup
+
+1. **Create Integration**
+   - Go to Notion Developers page
+   - Create a new integration
+   - Copy the integration token
+
+2. **Setup Database**
+   - Create a new database in Notion
+   - Add required properties (see database schema)
+   - Share database with your integration
+
+3. **Configure Properties**
+   - SKU (Title)
+   - Current Stock (Number)
+   - Reorder Quantity (Number)
+   - Total Cost (Number)
+   - Status (Select)
+   - Rationale (Rich Text)
+
+### Email Configuration
+
+1. **Gmail Setup**
+   - Enable 2-Factor Authentication
+   - Generate App Password
+   - Use App Password in configuration
+
+2. **SMTP Configuration**
+   - Server: smtp.gmail.com
+   - Port: 587
+   - Security: TLS
+
+3. **Alternative Email Providers**
+   - Configure SMTP settings for your provider
+   - Update email connector configuration
+
+## Usage
+
+### Starting the System
+
+#### MCP Mode (Recommended)
+```bash
+# Start MCP server (if using external MCP server)
+# Follow MCP server documentation
+
+# Start the main agent
+python src/agent_main.py
+```
+
+#### Legacy Mode
+```bash
+# Set environment variable to use legacy connectors
+export USE_LEGACY_CONNECTORS=true
+
+# Start the main agent
+python src/agent_main.py
+```
+
+#### Demo Mode
+```bash
+# Enable demo mode for testing
+export DEMO_MODE=true
+
+# Start the agent (outputs will be saved to demo/ directory)
+python src/agent_main.py
+```
+
+### Webhook Server
+
+For handling approval responses, start the webhook server:
+
+```bash
+# Start webhook server
+python -m uvicorn src.webhook.app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Running Specific Components
+
+#### Test Individual Connectors
+```bash
+# Test Google Sheets integration
+python tests/test_sheets_connector.py
+
+# Test Notion integration
+python tests/test_notion_connector.py
+
+# Test email functionality
+python tests/test_email_connector.py
+```
+
+#### Test MCP Integration
+```bash
+# Test MCP connectivity
+python tests/test_mcp_integration.py
+
+# Test specific MCP tools
+python tests/test_mcp_tools.py
+```
+
+#### Generate Demo Data
+```bash
+# Create sample inventory data
+python demo/sample_inventory.py
+
+# Populate test database
+python demo/populate_demo_data.py
+```
+
+## Project Structure
+
+```
+inventory-pulse/
+├── src/                                    # Source code
+│   ├── agent_main.py                      # Main orchestration logic
+│   ├── connectors/                        # External service integrations
+│   │   ├── unified_mcp_connector.py       # MCP unified interface
+│   │   ├── mcp_client.py                 # MCP communication client
+│   │   ├── sheets_connector.py           # Google Sheets integration
+│   │   ├── notion_connector.py           # Notion integration
+│   │   ├── email_connector.py            # Email functionality
+│   │   └── supplier_connector.py         # Supplier API integration
+│   ├── policies/                          # Business logic
+│   │   ├── reorder_policy.py             # Reorder decision logic
+│   │   ├── eoq_optimizer.py              # Economic Order Quantity
+│   │   └── replenishment_policy.py       # Replenishment strategies
+│   ├── models/                            # Data models and AI
+│   │   ├── reorder_request.py            # Reorder request model
+│   │   ├── forecast.py                   # Demand forecasting
+│   │   └── llm_rationale.py              # AI rationale generation
+│   ├── utils/                             # Utilities
+│   │   ├── config.py                     # Configuration management
+│   │   └── logger.py                     # Logging utilities
+│   └── webhook/                           # Webhook server
+│       └── app.py                        # FastAPI webhook handlers
+├── tests/                                 # Test suite
+│   ├── test_connectors.py                # Connector tests
+│   ├── test_policies.py                  # Policy tests
+│   ├── test_models.py                    # Model tests
+│   └── test_mcp_integration.py           # MCP integration tests
+├── demo/                                  # Demo data and examples
+│   ├── outbox/                           # Demo email outputs
+│   ├── notion_pages/                     # Demo Notion outputs
+│   └── sample_inventory.py               # Sample data generator
+├── credentials/                           # API credentials (gitignored)
+├── requirements.txt                       # Python dependencies
+├── .env.example                          # Environment template
+├── FRICTION_LOG.txt                      # Development challenges log
+└── README.md                             # This file
+```
+
+## Testing
+
+### Comprehensive Test Suite
+
 ```bash
 # Run all tests
-pytest tests/
+pytest tests/ -v
 
-# Run specific test categories
-pytest tests/test_connectors.py
-pytest tests/test_policies.py
-pytest tests/test_models.py
+# Run with coverage
+pytest tests/ --cov=src --cov-report=html
 ```
 
-### Integration Tests
+### Component Testing
+
 ```bash
-# Test email functionality
-python test_email_delivery.py
+# Test MCP integration
+pytest tests/test_mcp_integration.py -v
 
-# Test Composio integrations
-python test_composio_gmail.py
+# Test legacy connectors
+pytest tests/test_connectors.py -v
 
-# Test Notion connection
-python test_notion_connection.py
+# Test business logic
+pytest tests/test_policies.py -v
+
+# Test data models
+pytest tests/test_models.py -v
 ```
 
-## 🐛 Troubleshooting
+### Integration Testing
 
-### Common Issues
+```bash
+# End-to-end MCP integration test
+python tests/test_mcp_integration.py
 
-#### Email Delivery Problems
-- **Check Gmail app password**: Ensure 2FA is enabled and app password is correct
-- **Verify Composio connection**: Run `python test_composio_gmail.py`
-- **Check spam folder**: Emails might be filtered as spam
+# End-to-end legacy integration test
+python tests/test_integration.py
 
-#### Notion Integration Issues
-- **Verify integration token**: Check token has correct permissions
-- **Database permissions**: Ensure database is shared with integration
-- **Property names**: Verify database has required properties
+# Webhook server testing
+python tests/test_webhook.py
+```
 
-#### Google Sheets Access
-- **Service account permissions**: Ensure sheet is shared with service account email
-- **API enabled**: Verify Google Sheets API is enabled in Google Cloud Console
-- **Credentials path**: Check credentials file path is correct
+### Manual Testing
 
-#### Composio Connection Issues
-- **API key validity**: Verify Composio API key is active
-- **Account connections**: Re-run setup scripts if connections fail
-- **Rate limits**: Check if hitting API rate limits
+```bash
+# Test with sample data
+python demo/sample_inventory.py
+
+# Test email delivery
+python tests/test_email_delivery.py
+
+# Test Notion page creation
+python tests/test_notion_pages.py
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### MCP Integration Problems
+
+**MCP Server Connection Failed**
+```bash
+# Check MCP server status
+curl http://localhost:3000/health
+
+# Verify MCP configuration
+python -c "
+from src.connectors.unified_mcp_connector import UnifiedMCPConnector
+connector = UnifiedMCPConnector(demo_mode=True)
+print('MCP connection successful')
+"
+```
+
+**MCP Tool Not Available**
+```bash
+# List available MCP tools
+python -c "
+from src.connectors.mcp_client import MCPClient
+client = MCPClient('http://localhost:3000')
+tools = client.list_tools()
+print('Available tools:', [tool['name'] for tool in tools])
+"
+```
+
+#### Authentication Issues
+
+**Google Sheets Authentication Failed**
+- Verify service account JSON file exists and is valid
+- Ensure spreadsheet is shared with service account email
+- Check that Google Sheets API is enabled in Google Cloud Console
+
+**Notion Integration Problems**
+- Verify integration token has correct permissions
+- Ensure database is shared with the integration
+- Check that all required properties exist in the database
+
+**Email Authentication Failed**
+- Verify Gmail app password is correct (16 characters)
+- Ensure 2-Factor Authentication is enabled
+- Check SMTP settings and port configuration
+
+#### System Performance Issues
+
+**Slow Response Times**
+- Check MCP server performance and connectivity
+- Verify database query optimization
+- Monitor system resource usage
+
+**Memory Usage Problems**
+- Review data processing batch sizes
+- Check for memory leaks in long-running processes
+- Optimize data structures and algorithms
 
 ### Debug Mode
 
-Enable debug logging:
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
+Enable comprehensive debugging:
+
+```bash
+# Set debug logging level
+export LOG_LEVEL=DEBUG
+
+# Enable MCP debug mode
+export MCP_DEBUG=true
+
+# Run with detailed logging
+python src/agent_main.py
 ```
 
-### Log Files
+### Log Analysis
 
-Check log files in:
-- `demo/agent_actions.db` - SQLite database with action logs
-- `demo/outbox/` - Email outputs in demo mode
-- `demo/notion_pages/` - Notion page outputs in demo mode
+```bash
+# Check system logs
+tail -f logs/agent.log
 
-## 📚 Documentation
+# Search for specific errors
+grep "ERROR" logs/agent.log
 
-- [Notion Setup Guide](NOTION_SETUP_GUIDE.md) - Detailed Notion integration setup
-- [Database Setup Guide](NOTION_DATABASE_SETUP.md) - Notion database configuration
-- [Database Schema](database_schema.json) - Complete database schema reference
+# Analyze performance metrics
+grep "PERFORMANCE" logs/agent.log
+```
 
-## 🤝 Contributing
+## Contributing
+
+We welcome contributions to Inventory Pulse. Please follow these guidelines:
+
+### Development Setup
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
+2. Create a virtual environment
+3. Install development dependencies
+4. Set up pre-commit hooks
 
-## 📄 License
+### Code Standards
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- Follow PEP 8 style guidelines
+- Add comprehensive docstrings
+- Include unit tests for new functionality
+- Maintain backward compatibility
 
-## 🆘 Support
+### Pull Request Process
 
-For support and questions:
-1. Check the troubleshooting section above
-2. Review existing documentation
-3. Run the test scripts to diagnose issues
-4. Check log files for detailed error messages
+1. Create a feature branch from main
+2. Implement your changes with tests
+3. Update documentation as needed
+4. Submit pull request with detailed description
 
-## 🔮 Future Enhancements
+### Testing Requirements
 
-- **Machine Learning Models**: Advanced demand forecasting
-- **Multi-Supplier Support**: Compare prices across suppliers
-- **Mobile App**: Mobile interface for approvals
-- **Dashboard**: Real-time inventory dashboard
-- **API Integration**: REST API for external systems
-- **Slack Integration**: Slack-based approval workflows
+- All new code must include unit tests
+- Integration tests for new connectors
+- Performance tests for optimization changes
+- Documentation updates for new features
+
+---
+
+**Inventory Pulse** - Intelligent Inventory Management for Modern Businesses
+
+Built with the Model Context Protocol (MCP) for seamless integration and extensibility.

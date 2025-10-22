@@ -5,12 +5,12 @@ This package contains all the external service connectors for the
 Inventory Replenishment Copilot.
 """
 
-from .sheets_connector import SheetsConnector
-from .notion_connector import NotionConnector
-from .email_connector import EmailConnector
+from src.connectors.sheets_connector import SheetsConnector
+from src.connectors.composio_notion_connector import ComposioNotionConnector
+from src.connectors.unified_mcp_connector import UnifiedMCPConnector
 
 __all__ = [
     "SheetsConnector",
-    "NotionConnector", 
-    "EmailConnector"
+    "ComposioNotionConnector", 
+    "UnifiedMCPConnector"
 ]

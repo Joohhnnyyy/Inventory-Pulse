@@ -38,13 +38,17 @@ class Config(BaseSettings):
     google_sheets_worksheet_name: str = Field(default="Inventory", env="GOOGLE_SHEETS_WORKSHEET_NAME")
     
     # Notion configuration
-    notion_api_key: str = Field(..., env="NOTION_TOKEN")
-    notion_database_id: str = Field(..., env="NOTION_DB_ID")
+    notion_api_key: str = Field(..., env="NOTION_API_KEY")
+    notion_database_id: str = Field(..., env="NOTION_DATABASE_ID")
     
     # Email configuration
     email_provider: str = Field(default="gmail", env="EMAIL_PROVIDER")
-    sender_email: str = Field(..., env="GMAIL_EMAIL")
-    sender_password: str = Field(..., env="GMAIL_APP_PASSWORD")
+    sender_email: str = Field(..., env="SENDER_EMAIL")
+    sender_password: str = Field(..., env="SENDER_PASSWORD")
+    
+    # Additional MCP-related configuration
+    composio_gmail_connection_id: Optional[str] = Field(default=None, env="COMPOSIO_GMAIL_CONNECTION_ID")
+    manager_email: Optional[str] = Field(default=None, env="MANAGER_EMAIL")
     
     # SMTP configuration (alternative to Gmail)
     smtp_server: Optional[str] = Field(default=None, env="SMTP_SERVER")
@@ -85,6 +89,7 @@ class Config(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Allow extra fields to be ignored instead of raising errors
     
     def __init__(self, **kwargs):
         """Initialize configuration with validation."""
@@ -94,8 +99,8 @@ class Config(BaseSettings):
     def _validate_config(self):
         """Validate configuration settings."""
         # Validate file paths
-        if not os.path.exists(self.google_credentials_file):
-            raise ValueError(f"Google credentials file not found: {self.google_credentials_file}")
+        if not os.path.exists(self.google_sheets_credentials_json):
+            raise ValueError(f"Google credentials file not found: {self.google_sheets_credentials_json}")
         
         # Validate email provider
         if self.email_provider not in ['gmail', 'smtp']:
