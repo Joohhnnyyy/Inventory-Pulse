@@ -712,6 +712,15 @@ grep "ERROR" logs/agent.log
 grep "PERFORMANCE" logs/agent.log
 ```
 
+## Project Artefacts
+
+### Technical Documentation
+
+#### Technical Docs
+All technical details are documented in markdown files, including system architecture, implementation details.
+
+📚 **[Complete Technical Documentation](DOCUMENTATION.md)** - Comprehensive guide covering setup, architecture, API documentation, and development workflows.
+
 ## Contributing
 
 We welcome contributions to Inventory Pulse. Please follow these guidelines:
