@@ -1,0 +1,32 @@
+{
+  "example_context": {
+    "sku": "WIDGET-001",
+    "on_hand": 25,
+    "weekly_demand": 15,
+    "stockout_date": "2024-02-15",
+    "best_vendor": {
+      "name": "Acme Supplies",
+      "EOQ": 100,
+      "TotalCost": 1250.00
+    },
+    "last_90d_stats": {
+      "avg_daily": 2.1,
+      "stddev": 0.8
+    }
+  },
+  "generated_rationale": {
+    "paragraph": "Item WIDGET-001 requires immediate reordering due to critically low stock levels and high demand velocity. With only 25 units remaining and weekly demand of 15 units, stockout is predicted for 2024-02-15, which is within the lead time window. Acme Supplies offers the optimal cost-efficiency with an EOQ of 100 units at $1,250 total cost.",
+    "bullets": [
+      "Current stock (25 units) provides less than 2 weeks of coverage at current demand rate",
+      "Weekly consumption rate of 15 units indicates rapid inventory depletion",
+      "Stockout risk identified for 2024-02-15, requiring immediate action",
+      "Selected vendor (Acme Supplies) provides best total cost optimization with EOQ of 100 units at $1,250"
+    ]
+  },
+  "metadata": {
+    "generated_at": "2024-01-15T10:30:00Z",
+    "generator_version": "1.0.0",
+    "mode": "deterministic_fallback",
+    "prompt_template_used": "RATIONALE_PROMPT_TEMPLATE"
+  }
+}

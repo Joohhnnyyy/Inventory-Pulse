@@ -1,0 +1,22 @@
+{
+  "page_id": "demo_page_1761070968",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "APPROVAL-TEST-001",
+  "quantity": 250,
+  "vendor": "Premium Supplier Inc",
+  "total_cost": 3750.0,
+  "eoq": 300,
+  "status": "Processing",
+  "created_date": "2025-10-21T23:52:48.707920",
+  "forecast": "Approval workflow test: High-priority reorder requiring manager approval due to cost threshold",
+  "evidence": [
+    "Evidence 1: Current stock level critically low (5 units remaining)",
+    "Evidence 2: Sales forecast shows 40% increase next quarter",
+    "Evidence 3: Vendor offering 15% bulk discount for orders >200 units",
+    "Evidence 4: Lead time is 3 weeks, need to order immediately",
+    "Evidence 5: Alternative suppliers 25% more expensive"
+  ],
+  "timestamp": "2025-10-21T23:52:48.707924",
+  "updated_date": "2025-10-21T23:52:52.727858",
+  "order_confirmation": "WORKFLOW COMPLETE - Approval confirmed and vendor notification in progress. Completed at 2025-10-21 23:52:52"
+}

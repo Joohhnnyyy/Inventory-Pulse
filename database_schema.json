@@ -1,0 +1,159 @@
+{
+  "database_name": "Inventory Reorders",
+  "description": "Database for tracking inventory reorder requests and status",
+  "properties": {
+    "SKU": {
+      "type": "title",
+      "description": "Product SKU/identifier (primary key)",
+      "required": true,
+      "example": "WIDGET-001"
+    },
+    "Quantity": {
+      "type": "number",
+      "description": "Quantity to reorder",
+      "required": true,
+      "format": "number",
+      "example": 100
+    },
+    "Vendor": {
+      "type": "rich_text",
+      "description": "Supplier/vendor name",
+      "required": true,
+      "example": "Acme Supplies Inc."
+    },
+    "Total Cost": {
+      "type": "number",
+      "description": "Total cost of the order",
+      "required": true,
+      "format": "dollar",
+      "example": 1250.00
+    },
+    "EOQ": {
+      "type": "number",
+      "description": "Economic Order Quantity",
+      "required": true,
+      "format": "number",
+      "example": 150
+    },
+    "Status": {
+      "type": "select",
+      "description": "Current order status",
+      "required": true,
+      "options": [
+        {
+          "name": "Pending",
+          "color": "yellow",
+          "description": "Awaiting approval"
+        },
+        {
+          "name": "Approved",
+          "color": "blue",
+          "description": "Approved for ordering"
+        },
+        {
+          "name": "Ordered",
+          "color": "green",
+          "description": "Order placed with supplier"
+        },
+        {
+          "name": "Rejected",
+          "color": "red",
+          "description": "Order request rejected"
+        },
+        {
+          "name": "Completed",
+          "color": "gray",
+          "description": "Order received and processed"
+        }
+      ],
+      "default": "Pending"
+    },
+    "Forecast": {
+      "type": "rich_text",
+      "description": "AI-generated demand forecast and analysis",
+      "required": false,
+      "example": "Based on Q4 sales trends, expecting 25% increase in demand"
+    },
+    "Evidence": {
+      "type": "rich_text",
+      "description": "Supporting evidence and data for reorder decision",
+      "required": false,
+      "example": "Current stock: 15 units (below minimum threshold of 50)\\nAverage monthly consumption: 45 units\\nLead time: 14 days"
+    },
+    "Order Confirmation": {
+      "type": "rich_text",
+      "description": "Order confirmation details and tracking",
+      "required": false,
+      "example": "PO-2024-001 submitted to vendor on 2024-01-15"
+    },
+    "Priority": {
+      "type": "select",
+      "description": "Order priority level",
+      "required": false,
+      "options": [
+        {
+          "name": "Critical",
+          "color": "red",
+          "description": "Urgent - stock out imminent"
+        },
+        {
+          "name": "High",
+          "color": "orange",
+          "description": "High priority - low stock"
+        },
+        {
+          "name": "Medium",
+          "color": "yellow",
+          "description": "Normal priority"
+        },
+        {
+          "name": "Low",
+          "color": "green",
+          "description": "Low priority - preventive reorder"
+        }
+      ],
+      "default": "Medium"
+    },
+    "Supplier Contact": {
+      "type": "email",
+      "description": "Vendor contact email",
+      "required": false,
+      "example": "orders@acmesupplies.com"
+    },
+    "Created": {
+      "type": "created_time",
+      "description": "When the reorder request was created",
+      "required": false,
+      "auto_generated": true
+    }
+  },
+  "views": {
+    "All Orders": {
+      "type": "table",
+      "sort": [{"property": "Created", "direction": "descending"}],
+      "group_by": "Status"
+    },
+    "Pending Orders": {
+      "type": "table",
+      "filter": {"property": "Status", "select": {"equals": "Pending"}},
+      "sort": [{"property": "Created", "direction": "descending"}]
+    },
+    "Approved Orders": {
+      "type": "table",
+      "filter": {"property": "Status", "select": {"equals": "Approved"}},
+      "sort": [{"property": "Created", "direction": "descending"}]
+    },
+    "Status Board": {
+      "type": "board",
+      "group_by": "Status"
+    }
+  },
+  "templates": {
+    "Standard Reorder": {
+      "properties": {
+        "Status": "Pending",
+        "Priority": "Medium"
+      }
+    }
+  }
+}

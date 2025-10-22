@@ -1,0 +1,22 @@
+{
+  "page_id": "demo_page_1761074146",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "PROD-TEST-002",
+  "quantity": 24,
+  "vendor": "TEST-VENDOR-002",
+  "total_cost": 300.0,
+  "eoq": 29,
+  "status": "Approval Email Sent",
+  "created_date": "2025-10-22T00:45:46.199510",
+  "forecast": "Production test: Critical stock level - immediate reorder needed",
+  "evidence": [
+    "Current stock: 8 bottle",
+    "Suggested order: 24 bottle",
+    "Unit cost: $12.50",
+    "Urgency level: High",
+    "Vendor: TEST-VENDOR-002"
+  ],
+  "timestamp": "2025-10-22T00:45:46.199517",
+  "updated_date": "2025-10-22T00:45:47.016740",
+  "order_confirmation": "Production approval email sent at 2025-10-22 00:45:47"
+}

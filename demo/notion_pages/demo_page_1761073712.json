@@ -1,0 +1,22 @@
+{
+  "page_id": "demo_page_1761073712",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "OFFICE-001",
+  "quantity": 101,
+  "vendor": "VENDOR-001",
+  "total_cost": 2089.8103223742537,
+  "eoq": 108,
+  "status": "Pending Approval",
+  "created_date": "2025-10-22T00:38:32.339504",
+  "forecast": "Based on historical consumption patterns, OFFICE-001 shows steady demand with seasonal variations.",
+  "evidence": [
+    "Current inventory: 45 pack",
+    "Minimum order quantity: 10 pack",
+    "Supplier lead time: 3 days",
+    "Auto-order threshold: $500.00",
+    "Vendor trust score: 95%"
+  ],
+  "timestamp": "2025-10-22T00:38:32.339514",
+  "updated_date": "2025-10-22T00:38:32.341742",
+  "order_confirmation": "Email sent to manager at 2025-10-22 00:38:32"
+}

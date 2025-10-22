@@ -1,0 +1,22 @@
+{
+  "page_id": "demo_page_1761070483",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "WIDGET-PRO-2024",
+  "quantity": 150,
+  "vendor": "Premium Widgets Inc.",
+  "total_cost": 2250.0,
+  "eoq": 200,
+  "status": "Approved",
+  "created_date": "2025-10-21T23:44:43.441453",
+  "forecast": "Q4 demand forecast shows 40% increase in widget sales. Holiday season approaching with expected surge in orders. Current stock: 25 units, reorder point: 50 units.",
+  "evidence": [
+    "Current stock level (25 units) below reorder point (50 units)",
+    "Sales velocity increased 40% over last 30 days",
+    "Holiday season demand surge expected in next 60 days",
+    "Vendor lead time: 14 days, safety stock requirement: 75 units",
+    "Economic Order Quantity analysis recommends 200 unit orders"
+  ],
+  "timestamp": "2025-10-21T23:44:43.441457",
+  "updated_date": "2025-10-21T23:44:43.442043",
+  "order_confirmation": "PO-20251021-2024"
+}

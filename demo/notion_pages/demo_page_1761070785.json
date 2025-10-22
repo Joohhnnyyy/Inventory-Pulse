@@ -1,0 +1,21 @@
+{
+  "page_id": "demo_page_1761070785",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "DUMMY-TEST-001",
+  "quantity": 100,
+  "vendor": "Test Vendor Corp",
+  "total_cost": 1500.0,
+  "eoq": 150,
+  "status": "Email Sent",
+  "created_date": "2025-10-21T23:49:45.712999",
+  "forecast": "Dummy test forecast: Testing email and Notion integration workflow",
+  "evidence": [
+    "Test Evidence 1: Integration testing in progress",
+    "Test Evidence 2: Email connector ready",
+    "Test Evidence 3: Notion connector ready",
+    "Test Evidence 4: Workflow validation needed"
+  ],
+  "timestamp": "2025-10-21T23:49:45.713002",
+  "updated_date": "2025-10-21T23:49:45.713509",
+  "order_confirmation": "Email notification sent at 2025-10-21 23:49:45"
+}

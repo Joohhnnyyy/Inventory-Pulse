@@ -1,0 +1,22 @@
+{
+  "page_id": "demo_page_1761074142",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "PROD-TEST-001",
+  "quantity": 50,
+  "vendor": "TEST-VENDOR-001",
+  "total_cost": 1299.5,
+  "eoq": 55,
+  "status": "Approval Email Sent",
+  "created_date": "2025-10-22T00:45:42.183766",
+  "forecast": "Production test: Stock level below optimal threshold",
+  "evidence": [
+    "Current stock: 15 pack",
+    "Suggested order: 50 pack",
+    "Unit cost: $25.99",
+    "Urgency level: Medium",
+    "Vendor: TEST-VENDOR-001"
+  ],
+  "timestamp": "2025-10-22T00:45:42.183782",
+  "updated_date": "2025-10-22T00:45:43.192685",
+  "order_confirmation": "Production approval email sent at 2025-10-22 00:45:43"
+}

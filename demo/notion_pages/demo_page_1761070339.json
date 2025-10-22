@@ -1,0 +1,19 @@
+{
+  "page_id": "demo_page_1761070339",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "TEST-001",
+  "quantity": 50,
+  "vendor": "Test Vendor",
+  "total_cost": 500.0,
+  "eoq": 75,
+  "status": "Approved",
+  "created_date": "2025-10-21T23:42:19.965672",
+  "forecast": "Test forecast",
+  "evidence": [
+    "Test evidence 1",
+    "Test evidence 2"
+  ],
+  "timestamp": "2025-10-21T23:42:19.965673",
+  "updated_date": "2025-10-21T23:42:19.965877",
+  "order_confirmation": "Test order confirmation"
+}

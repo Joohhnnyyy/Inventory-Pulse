@@ -1,0 +1,18 @@
+{
+  "page_id": "demo_page_1761078299",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "PROD-TEST-1761078299",
+  "quantity": 100,
+  "vendor": "Production Test Vendor",
+  "total_cost": 2500.0,
+  "eoq": 100,
+  "status": "Pending Approval",
+  "created_date": "2025-10-22T01:54:59.664265",
+  "forecast": "Production workflow test - automated reorder request",
+  "evidence": [
+    "Stock level below threshold for PROD-TEST-1761078299",
+    "High urgency reorder: High",
+    "Total cost: $2500.0"
+  ],
+  "timestamp": "2025-10-22T01:54:59.664279"
+}

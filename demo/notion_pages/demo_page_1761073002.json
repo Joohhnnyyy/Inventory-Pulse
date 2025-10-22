@@ -1,0 +1,17 @@
+{
+  "page_id": "demo_page_1761073002",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "TEST-UPDATE-001",
+  "quantity": 25,
+  "vendor": "Test Vendor",
+  "total_cost": 250.0,
+  "eoq": 50,
+  "status": "Pending Approval",
+  "created_date": "2025-10-22T00:26:42.344743",
+  "forecast": "Test forecast",
+  "evidence": [
+    "Evidence 1",
+    "Evidence 2"
+  ],
+  "timestamp": "2025-10-22T00:26:42.344749"
+}

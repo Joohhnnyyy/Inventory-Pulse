@@ -1,0 +1,20 @@
+{
+  "page_id": "demo_page_1761078344",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "PROD-TEST-1761078344",
+  "quantity": 100,
+  "vendor": "Production Test Vendor",
+  "total_cost": 2500.0,
+  "eoq": 100,
+  "status": "Awaiting Approval",
+  "created_date": "2025-10-22T01:55:44.944325",
+  "forecast": "Production workflow test - automated reorder request",
+  "evidence": [
+    "Stock level below threshold for PROD-TEST-1761078344",
+    "High urgency reorder: High",
+    "Total cost: $2500.0"
+  ],
+  "timestamp": "2025-10-22T01:55:44.944339",
+  "updated_date": "2025-10-22T01:55:46.160107",
+  "order_confirmation": "Approval email sent to johnsonansh32@gmail.com at 2025-10-22 01:55:46"
+}

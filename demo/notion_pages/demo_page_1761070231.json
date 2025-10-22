@@ -1,0 +1,20 @@
+{
+  "page_id": "demo_page_1761070231",
+  "database_id": "78b538c4cfa945d797f9bc818d5d98c0",
+  "sku": "TEST-001",
+  "quantity": 50,
+  "vendor": "Test Vendor Inc.",
+  "total_cost": 500.0,
+  "eoq": 75,
+  "status": "Approved",
+  "created_date": "2025-10-21T23:40:31.754875",
+  "forecast": "Test forecast for demo purposes",
+  "evidence": [
+    "Test evidence 1: Stock below threshold",
+    "Test evidence 2: Seasonal demand increase",
+    "Test evidence 3: Lead time considerations"
+  ],
+  "timestamp": "2025-10-21T23:40:31.754881",
+  "updated_date": "2025-10-21T23:40:31.755285",
+  "order_confirmation": "Test order confirmation - PO-DEMO-001"
+}
