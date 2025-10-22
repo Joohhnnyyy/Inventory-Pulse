@@ -193,6 +193,11 @@ service-account-key.json
 *.pem
 *.key
 
+# Google Cloud Service Account Credentials
+credentials/
+credentials/*.json
+inventory-intelligence-tool-*.json
+
 # Database files
 *.db
 *.sqlite
