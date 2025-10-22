@@ -4,6 +4,21 @@
 
 Inventory Pulse is an advanced inventory management system that leverages artificial intelligence and the Model Context Protocol (MCP) to automate inventory monitoring, reorder decision-making, and supplier coordination. The system integrates seamlessly with Google Sheets, Notion, and email platforms to provide a comprehensive solution for modern inventory management challenges.
 
+## Problem Statement - Industrial Agents (SMB-focussed)
+
+Inventory Replenishment Copilot – Track stock in Sheets, forecast depletion via LLMs, update Notion reorder plans, and email approvals via Gmail.
+
+## Team Name
+
+NeoMinds
+
+## Team Members
+
+- **Member 1**: Madhur Prakash Mangal - madhurprakash2005@gmail.com
+- **Member 2**: Akshat Arya - akshatarya2507@gmail.com
+- **Member 3**: Nidhi Singh - nidhisingh5958@gmail.com
+- **Member 4**: Ansh Johnson - anshjohnson69@gmail.com
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -53,8 +68,8 @@ Inventory Pulse solves these challenges through:
 │  │   Agent Main    │    │  MCP Server     │    │ External    │  │
 │  │   Controller    │◄──►│   Gateway       │◄──►│ Services    │  │
 │  └─────────────────┘    └─────────────────┘    └─────────────┘  │
-│           │                       │                      │       │
-│           ▼                       ▼                      ▼       │
+│           │                       │                      │      │
+│           ▼                       ▼                      ▼      │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
 │  │ Business Logic  │    │ Legacy Fallback │    │ Webhook     │  │
 │  │ & Policies      │    │ Connectors      │    │ Server      │  │
